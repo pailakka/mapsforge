@@ -12,5 +12,5 @@ WORKDIR /app
 RUN apk update && apk add curl && \
     curl --fail -O https://bretth.dev.openstreetmap.org/osmosis-build/osmosis-latest.tgz -Oosmosis-latest.tgz && \
     tar -xvzf osmosis-latest.tgz
-COPY --from=builder /home/gradle/project/mapsforge-map-writer/build/libs/mapsforge-map-writer-master-SNAPSHOT-jar-with-dependencies.jar /app/osmosis/plugins/
-CMD /app/osmosis/bin/osmosis
+COPY --from=builder /home/gradle/project/mapsforge-map-writer/build/libs/mapsforge-map-writer-master-SNAPSHOT-jar-with-dependencies.jar /app/plugins/
+CMD /app/bin/osmosis
