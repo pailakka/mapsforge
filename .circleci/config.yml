@@ -43,6 +43,9 @@ jobs:
 
 
       - run: gradle :mapsforge-map-writer:build --info --stacktrace
+      - store_artifacts:
+          path: ~/repo/mapsforge-map-writer/build/libs
+
 
 
 
