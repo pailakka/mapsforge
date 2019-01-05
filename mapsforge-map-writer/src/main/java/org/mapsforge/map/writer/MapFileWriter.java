@@ -890,17 +890,24 @@ public final class MapFileWriter {
                                 continue;
                             }
                             if (wpr != null) {
-                                wayBuffer.clear();
-                                // increment count of ways on this zoom level
-                                entitiesPerZoomLevel[indexEntitiesPerZoomLevelTable][1]++;
-                                if (configuration.isDebugStrings()) {
-                                    writeWaySignature(wpr.getWay(), wayDataBuffer);
+                                try {
+                                    wayBuffer.clear();
+                                    // increment count of ways on this zoom level
+                                    entitiesPerZoomLevel[indexEntitiesPerZoomLevelTable][1]++;
+                                    if (configuration.isDebugStrings()) {
+                                        writeWaySignature(wpr.getWay(), wayDataBuffer);
+                                    }
+                                    processWay(wpr, wpr.getWay(), currentTileLat, currentTileLon, wayBuffer);
+                                    // write size of way to way data buffer
+                                    wayDataBuffer.put(Serializer.getVariableByteUnsigned(wayBuffer.position()));
+                                    // write way data to way data buffer
+                                    wayDataBuffer.put(wayBuffer.array(), 0, wayBuffer.position());
+                                } catch (Exception e) {
+                                    LOGGER.log(Level.SEVERE,tileCoordinate.toString());
+                                    LOGGER.log(Level.SEVERE,"lat: " + currentTileLat + " lon: " + currentTileLon);
+                                    LOGGER.log(Level.SEVERE,wpr.getWay().toString());
+                                    throw e;
                                 }
-                                processWay(wpr, wpr.getWay(), currentTileLat, currentTileLon, wayBuffer);
-                                // write size of way to way data buffer
-                                wayDataBuffer.put(Serializer.getVariableByteUnsigned(wayBuffer.position()));
-                                // write way data to way data buffer
-                                wayDataBuffer.put(wayBuffer.array(), 0, wayBuffer.position());
                             }
                         }
                     } catch (InterruptedException e) {
