@@ -99,7 +99,7 @@ public final class GeoUtils {
                 LOGGER.warning("invalid geometry prior to tile clipping, trying to repair " + way.getId());
                 geometry = JTSUtils.repairInvalidPolygon(geometry);
                 if (!geometry.isValid()) {
-                    LOGGER.warning("invalid geometry even after attempt to fix " + way.getId());
+                    LOGGER.warning("invalid geometry even after attempt to fix " + way.toString());
                 }
             }
             ret = tileBBJTS.intersection(geometry);
@@ -112,7 +112,7 @@ public final class GeoUtils {
                 ret = JTSUtils.repairInvalidPolygon(ret);
                 if (ret == null) {
                     way.setInvalid(true);
-                    LOGGER.warning("could not repair invalid polygon: " + way.getId());
+                    LOGGER.warning("could not repair invalid polygon: " + way.toString());
                 }
             }
         } catch (TopologyException e) {
