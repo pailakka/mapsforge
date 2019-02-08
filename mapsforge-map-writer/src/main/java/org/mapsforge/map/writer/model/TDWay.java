@@ -403,8 +403,8 @@ public class TDWay {
 
     @Override
     public String toString() {
-        return "TDWay [id=" + this.id + ", name=" + this.name + ", tags=" + Arrays.toString(this.tags.keySet().toArray()) + ", polygon="
-                + this.shape + "]";
+        return "TDWay [id=" + this.id + ", name=" + this.name + ", tags=" + Arrays.toString(this.tags.keySet().toArray()) + ", wayNodes="
+                + Arrays.toString(this.wayNodes) + "]";
     }
 
     private void addTags(Map<Short, Object> addendum) {

@@ -898,6 +898,13 @@ public final class MapFileWriter {
                                         writeWaySignature(wpr.getWay(), wayDataBuffer);
                                     }
                                     processWay(wpr, wpr.getWay(), currentTileLat, currentTileLon, wayBuffer);
+                                    if (wayBuffer.position() > wayBuffer.limit()) {
+                                        LOGGER.log(Level.SEVERE,"TOO LARGE FOR BUFFER!");
+                                        LOGGER.log(Level.SEVERE,tileCoordinate.toString());
+                                        LOGGER.log(Level.SEVERE,"lat: " + currentTileLat + " lon: " + currentTileLon);
+                                        LOGGER.log(Level.SEVERE,wpr.getWay().toString());
+                                        continue;
+                                    }
                                     // write size of way to way data buffer
                                     wayDataBuffer.put(Serializer.getVariableByteUnsigned(wayBuffer.position()));
                                     // write way data to way data buffer
