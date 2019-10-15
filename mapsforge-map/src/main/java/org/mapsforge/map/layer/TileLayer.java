@@ -1,7 +1,8 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2015-2016 devemux86
+ * Copyright 2015-2019 devemux86
+ * Copyright 2019 cpt1gl0
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -23,6 +24,7 @@ import org.mapsforge.core.graphics.TileBitmap;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.Point;
 import org.mapsforge.core.model.Tile;
+import org.mapsforge.core.util.Parameters;
 import org.mapsforge.map.layer.cache.TileCache;
 import org.mapsforge.map.layer.queue.Job;
 import org.mapsforge.map.layer.queue.JobQueue;
@@ -98,7 +100,9 @@ public abstract class TileLayer<T extends Job> extends Layer {
                 if (this.hasJobQueue && !this.tileCache.containsKey(job)) {
                     this.jobQueue.add(job);
                 }
-                drawParentTileBitmap(canvas, point, tile);
+                if (Parameters.PARENT_TILES_RENDERING != Parameters.ParentTilesRendering.OFF) {
+                    drawParentTileBitmap(canvas, point, tile);
+                }
             } else {
                 if (isTileStale(tile, bitmap) && this.hasJobQueue && !this.tileCache.containsKey(job)) {
                     this.jobQueue.add(job);
@@ -162,13 +166,30 @@ public abstract class TileLayer<T extends Job> extends Layer {
                 int x = (int) Math.round(point.x);
                 int y = (int) Math.round(point.y);
 
-                this.matrix.reset();
-                this.matrix.translate(x - translateX, y - translateY);
-                this.matrix.scale(scaleFactor, scaleFactor);
+                if (Parameters.PARENT_TILES_RENDERING == Parameters.ParentTilesRendering.SPEED) {
+                    boolean antiAlias = canvas.isAntiAlias();
+                    boolean filterBitmap = canvas.isFilterBitmap();
 
-                canvas.setClip(x, y, this.displayModel.getTileSize(), this.displayModel.getTileSize());
-                canvas.drawBitmap(bitmap, this.matrix, this.displayModel.getFilter());
-                canvas.resetClip();
+                    canvas.setAntiAlias(false);
+                    canvas.setFilterBitmap(false);
+
+                    canvas.drawBitmap(bitmap,
+                            (int) (translateX / scaleFactor), (int) (translateY / scaleFactor), (int) ((translateX + tileSize) / scaleFactor), (int) ((translateY + tileSize) / scaleFactor),
+                            x, y, x + tileSize, y + tileSize,
+                            this.displayModel.getFilter());
+
+                    canvas.setAntiAlias(antiAlias);
+                    canvas.setFilterBitmap(filterBitmap);
+                } else {
+                    this.matrix.reset();
+                    this.matrix.translate(x - translateX, y - translateY);
+                    this.matrix.scale(scaleFactor, scaleFactor);
+
+                    canvas.setClip(x, y, this.displayModel.getTileSize(), this.displayModel.getTileSize());
+                    canvas.drawBitmap(bitmap, this.matrix, this.displayModel.getFilter());
+                    canvas.resetClip();
+                }
+
                 bitmap.decrementRefCount();
             }
         }

@@ -2,7 +2,7 @@
 
 **This article describes how to use XML-based renderthemes to style maps, including the extensions of Rendertheme V4 or newer (new with release 0.5).**
 
-If you have any questions or problems, don't hesitate to ask our public [mapsforge-dev](https://groups.google.com/group/mapsforge-dev) mailing list for help. You can also report bugs and improvement requests via our [issue tracker](https://github.com/mapsforge/mapsforge/issues).
+If you have any questions or problems, don't hesitate to ask our public [forum](https://groups.google.com/group/mapsforge-dev) for help. You can also report bugs and improvement requests via our [issue tracker](https://github.com/mapsforge/mapsforge/issues).
 
 ## Introduction
 
@@ -42,8 +42,8 @@ A rule element has several attributes to specify which map elements the rule mat
 |**Attribute**|**Valid values**|**Description**|**Required**|
 |-------------|----------------|---------------|------------|
 |e|<ul><li>node</li><li>way</li><li>any</li></ul>|Defines which map element type will be matched.|yes|
-|k|[string](http://www.w3.org/TR/xmlschema-2/#string)|The key of the OpenStreetMap tag. <ul><li>A vertical bar "\|" can be used to specify multiple keys.</li><li>An asterisk "`*`" serves as wildcard character.</li>|yes|
-|v|[string](http://www.w3.org/TR/xmlschema-2/#string)|The value of the OpenStreetMap tag. <ul><li>A vertical bar "\|" can be used to specify multiple values.</li><li>An asterisk "`*`" serves as wildcard character.</li><li>A tilde "~" matches if the map element does not have a tag with the specified key.</li>|yes|
+|k|[string](http://www.w3.org/TR/xmlschema-2/#string)|The key of the tile source tag. <ul><li>A vertical bar "\|" can be used to specify multiple keys.</li><li>An asterisk "`*`" serves as wildcard character.</li>|yes|
+|v|[string](http://www.w3.org/TR/xmlschema-2/#string)|The value of the tile source tag. <ul><li>A vertical bar "\|" can be used to specify multiple values.</li><li>An asterisk "`*`" serves as wildcard character.</li><li>A tilde "~" matches if the map element does not have a tag with the specified key.</li>|yes|
 |closed|<ul><li>yes</li><li>no</li><li>any</li></ul>|Defines which ways will be matched. A way is considered as closed if its first node and its last node are equal.|no (default is *any*)|
 |zoom-min|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The minimum zoom level on which the rule will be matched.|no (default is 0)|
 |zoom-max|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The maximum zoom level on which the rule will be matched.|no (default is 127)|

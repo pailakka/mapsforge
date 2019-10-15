@@ -7,9 +7,10 @@
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <!--Explicit permission needed only for DownloadManager, see #723-->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Write permission needed only for DownloadManager -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="18" />
 
     <application
         android:name=".SamplesApplication"
@@ -45,13 +46,7 @@
             android:name=".BubbleOverlay"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".ChangingBitmaps"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".ClusterMapActivity"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".DefaultTheme"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".DiagnosticsMapViewer"
@@ -63,16 +58,7 @@
             android:name=".DownloadLayerViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".DualMapnikMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".DualMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".DualMapViewerWithClampedTileSizes"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".DualMapViewerWithDifferentDisplayModels"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".DualOverviewMapViewer"
@@ -81,22 +67,10 @@
             android:name=".GettingStarted"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".GridMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".GroupMarkerExample"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".HillshadingCompareMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".HillshadingMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".HillshadingMapViewerDiffuseShading"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".HillshadingMapViewerFaster"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".ItemDetailActivity"
@@ -119,19 +93,10 @@
             android:name=".LabelLayerUsingMapDataStoreMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".LabelLayerUsingMapDataStoreMapViewerThreaded"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".LocationOverlayMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".LongPressAction"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".MapViewPosition2Viewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".MoveAnimation"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".MultiLingualMapViewer"
@@ -140,22 +105,10 @@
             android:name=".MultiMapLowResWorld"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".NightModeViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".NoXMLLayout"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".OverlayMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".OverlayWithoutBaseMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".PoiSearchViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".RenderThemeChanger"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".ReverseGeocodeViewer"
@@ -164,31 +117,16 @@
             android:name=".RotateMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".SimpleDataStoreMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".SimplestMapViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".StackedLayersMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".StyleMenuMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".TileSizeChanger"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".TileStoreLayerViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".TwoMaps"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
             android:name=".ViewOverlayViewer"
-            android:configChanges="keyboardHidden|orientation|screenSize" />
-        <activity
-            android:name=".ZoomToBounds"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".Settings"

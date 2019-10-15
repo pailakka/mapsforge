@@ -1,8 +1,10 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2014-2018 devemux86
+ * Copyright 2014-2019 devemux86
  * Copyright 2017 usrusr
+ * Copyright 2019 cpt1gl0
+ * Copyright 2019 Adrian Batzill
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -17,21 +19,15 @@
  */
 package org.mapsforge.map.android.graphics;
 
-import android.graphics.ColorFilter;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
-import android.graphics.PorterDuff;
-import android.graphics.Rect;
-import android.graphics.Region;
+import android.graphics.*;
 import android.os.Build;
-
 import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Color;
-import org.mapsforge.core.graphics.Filter;
 import org.mapsforge.core.graphics.Matrix;
 import org.mapsforge.core.graphics.Paint;
 import org.mapsforge.core.graphics.Path;
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.model.Dimension;
 import org.mapsforge.core.model.Rectangle;
 
@@ -136,6 +132,30 @@ class AndroidCanvas implements Canvas {
     }
 
     @Override
+    public void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
+                           int dstLeft, int dstTop, int dstRight, int dstBottom) {
+        this.canvas.drawBitmap(AndroidGraphicFactory.getBitmap(bitmap),
+                new Rect(srcLeft, srcTop, srcRight, srcBottom),
+                new Rect(dstLeft, dstTop, dstRight, dstBottom),
+                this.bitmapPaint);
+    }
+
+    @Override
+    public void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
+                           int dstLeft, int dstTop, int dstRight, int dstBottom, Filter filter) {
+        applyFilter(filter);
+
+        this.canvas.drawBitmap(AndroidGraphicFactory.getBitmap(bitmap),
+                new Rect(srcLeft, srcTop, srcRight, srcBottom),
+                new Rect(dstLeft, dstTop, dstRight, dstBottom),
+                this.bitmapPaint);
+
+        if (filter != Filter.NONE) {
+            this.bitmapPaint.setColorFilter(null);
+        }
+    }
+
+    @Override
     public void drawCircle(int x, int y, int radius, Paint paint) {
         if (paint.isTransparent()) {
             return;
@@ -158,6 +178,20 @@ class AndroidCanvas implements Canvas {
             return;
         }
         this.canvas.drawPath(AndroidGraphicFactory.getPath(path), AndroidGraphicFactory.getPaint(paint));
+    }
+
+    @Override
+    public void drawPathText(String text, Path path, Paint paint) {
+        if (text == null || text.trim().isEmpty()) {
+            return;
+        }
+        if (paint.isTransparent()) {
+            return;
+        }
+
+        android.graphics.Paint androidPaint = AndroidGraphicFactory.getPaint(paint);
+        // Way text container was made larger by text height
+        this.canvas.drawTextOnPath(text, AndroidGraphicFactory.getPath(path), 0, androidPaint.getTextSize() / 4, androidPaint);
     }
 
     @Override
@@ -213,14 +247,26 @@ class AndroidCanvas implements Canvas {
     }
 
     @Override
+    public boolean isAntiAlias() {
+        return this.bitmapPaint.isAntiAlias();
+    }
+
+    @Override
+    public boolean isFilterBitmap() {
+        return this.bitmapPaint.isFilterBitmap();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
     public void resetClip() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            this.canvas.save();
-            this.canvas.clipRect(0, 0, getWidth(), getHeight());
-            this.canvas.restore();
-        } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             this.canvas.clipRect(0, 0, getWidth(), getHeight(), Region.Op.REPLACE);
         }
+    }
+
+    @Override
+    public void setAntiAlias(boolean aa) {
+        this.bitmapPaint.setAntiAlias(aa);
     }
 
     @Override
@@ -230,10 +276,15 @@ class AndroidCanvas implements Canvas {
 
     @Override
     public void setClip(int left, int top, int width, int height) {
+        setClip(left, top, width, height, false);
+    }
+
+    @Override
+    public void setClip(int left, int top, int width, int height, boolean intersect) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            this.canvas.save();
-            this.canvas.clipRect(left, top, left + width, top + height);
-            this.canvas.restore();
+            if (intersect) {
+                this.canvas.clipRect(left, top, left + width, top + height);
+            }
         } else {
             this.setClipInternal(left, top, width, height, Region.Op.REPLACE);
         }
@@ -241,13 +292,24 @@ class AndroidCanvas implements Canvas {
 
     @Override
     public void setClipDifference(int left, int top, int width, int height) {
-        this.setClipInternal(left, top, width, height, Region.Op.DIFFERENCE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            this.canvas.clipOutRect(left, top, left + width, top + height);
+        } else {
+            this.setClipInternal(left, top, width, height, Region.Op.DIFFERENCE);
+        }
     }
 
-    public void setClipInternal(int left, int top, int width, int height, Region.Op op) {
+    @SuppressWarnings("deprecation")
+    private void setClipInternal(int left, int top, int width, int height, Region.Op op) {
         this.canvas.clipRect(left, top, left + width, top + height, op);
     }
 
+    @Override
+    public void setFilterBitmap(boolean filter) {
+        this.bitmapPaint.setFilterBitmap(filter);
+    }
+
+    @SuppressWarnings("deprecation")
     @Override
     public void shadeBitmap(Bitmap bitmap, Rectangle hillRect, Rectangle tileRect, float magnitude) {
         this.canvas.save();
@@ -262,9 +324,7 @@ class AndroidCanvas implements Canvas {
         if (bitmap == null) {
             if (tileRect != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    this.canvas.save();
                     this.canvas.clipRect((float) tileRect.left, (float) tileRect.top, (float) tileRect.right, (float) tileRect.bottom);
-                    this.canvas.restore();
                 } else {
                     this.canvas.clipRect((float) tileRect.left, (float) tileRect.top, (float) tileRect.right, (float) tileRect.bottom, Region.Op.REPLACE);
                 }
@@ -283,9 +343,7 @@ class AndroidCanvas implements Canvas {
         if (horizontalScale < 1 && verticalScale < 1) {
             // fast path for wide zoom (downscaling)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                this.canvas.save();
                 this.canvas.clipRect((float) tileRect.left, (float) tileRect.top, (float) tileRect.right, (float) tileRect.bottom);
-                this.canvas.restore();
             } else {
                 this.canvas.clipRect((float) tileRect.left, (float) tileRect.top, (float) tileRect.right, (float) tileRect.bottom, Region.Op.REPLACE);
             }
@@ -448,16 +506,16 @@ class AndroidCanvas implements Canvas {
             return tmpBitmap;
         }
 
-        public android.graphics.Paint useAlphaPaint(int alpha) {
+        android.graphics.Paint useAlphaPaint(int alpha) {
             shadePaint.setAlpha(alpha);
             return shadePaint;
         }
 
-        public android.graphics.Bitmap useNeutralShadingPixel() {
+        android.graphics.Bitmap useNeutralShadingPixel() {
             return neutralShadingPixel;
         }
 
-        public android.graphics.Matrix useMatrix() {
+        android.graphics.Matrix useMatrix() {
             if (tmpMatrix == null) {
                 tmpMatrix = new android.graphics.Matrix();
             }
@@ -466,4 +524,3 @@ class AndroidCanvas implements Canvas {
         }
     }
 }
-

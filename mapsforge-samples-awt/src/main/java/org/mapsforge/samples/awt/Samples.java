@@ -2,7 +2,7 @@
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Christian Pesch
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2014-2018 devemux86
+ * Copyright 2014-2019 devemux86
  * Copyright 2017 usrusr
  *
  * This program is free software: you can redistribute it and/or modify it under the
@@ -48,7 +48,6 @@ import org.mapsforge.map.model.common.PreferencesFacade;
 import org.mapsforge.map.reader.MapFile;
 import org.mapsforge.map.rendertheme.InternalRenderTheme;
 
-import java.awt.Dimension;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -103,7 +102,7 @@ public final class Samples {
         frame.setTitle("Mapsforge Samples");
         frame.add(mapView);
         frame.pack();
-        frame.setSize(new Dimension(800, 600));
+        frame.setSize(1024, 768);
         frame.setLocationRelativeTo(null);
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
@@ -147,7 +146,8 @@ public final class Samples {
         if (SHOW_RASTER_MAP) {
             // Raster
             mapView.getModel().displayModel.setFixedTileSize(tileSize);
-            TileSource tileSource = OpenStreetMapMapnik.INSTANCE;
+            OpenStreetMapMapnik tileSource = OpenStreetMapMapnik.INSTANCE;
+            tileSource.setUserAgent("mapsforge-samples-awt");
             TileDownloadLayer tileDownloadLayer = createTileDownloadLayer(tileCache, mapView.getModel().mapViewPosition, tileSource);
             layers.add(tileDownloadLayer);
             tileDownloadLayer.start();

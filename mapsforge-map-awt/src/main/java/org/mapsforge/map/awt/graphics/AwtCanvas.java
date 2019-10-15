@@ -1,7 +1,10 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
- * Copyright 2014-2017 devemux86
+ * Copyright 2014-2019 devemux86
  * Copyright 2017 usrusr
+ * Copyright 2019 cpt1gl0
+ * Copyright 2019 Adrian Batzill
+ * Copyright 2019 Matthew Egeler
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -16,32 +19,21 @@
  */
 package org.mapsforge.map.awt.graphics;
 
-import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Color;
-import org.mapsforge.core.graphics.Filter;
-import org.mapsforge.core.graphics.Matrix;
 import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.Path;
-import org.mapsforge.core.graphics.Style;
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.model.Dimension;
 import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.util.Parameters;
 
-import java.awt.AlphaComposite;
-import java.awt.Composite;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.color.ColorSpace;
 import java.awt.font.TextLayout;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.Rectangle2D;
-import java.awt.image.BufferedImage;
-import java.awt.image.BufferedImageOp;
-import java.awt.image.ColorConvertOp;
-import java.awt.image.IndexColorModel;
-import java.awt.image.LookupOp;
-import java.awt.image.ShortLookupTable;
+import java.awt.image.*;
 import java.util.AbstractMap;
 import java.util.Map;
 
@@ -93,7 +85,7 @@ class AwtCanvas implements Canvas {
 
     AwtCanvas(Graphics2D graphics2D) {
         this.graphics2D = graphics2D;
-        enableAntiAliasing();
+        setAntiAlias(Parameters.ANTI_ALIASING);
 
         createFilters();
     }
@@ -182,6 +174,24 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
+    public void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
+                           int dstLeft, int dstTop, int dstRight, int dstBottom) {
+        this.graphics2D.drawImage(AwtGraphicFactory.getBitmap(bitmap),
+                dstLeft, dstTop, dstRight, dstBottom,
+                srcLeft, srcTop, srcRight, srcBottom,
+                null);
+    }
+
+    @Override
+    public void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
+                           int dstLeft, int dstTop, int dstRight, int dstBottom, Filter filter) {
+        this.graphics2D.drawImage(applyFilter(AwtGraphicFactory.getBitmap(bitmap), filter),
+                dstLeft, dstTop, dstRight, dstBottom,
+                srcLeft, srcTop, srcRight, srcBottom,
+                null);
+    }
+
+    @Override
     public void drawCircle(int x, int y, int radius, Paint paint) {
         if (paint.isTransparent()) {
             return;
@@ -235,6 +245,40 @@ class AwtCanvas implements Canvas {
 
             case STROKE:
                 this.graphics2D.draw(awtPath.path2D);
+                return;
+        }
+
+        throw new IllegalArgumentException(UNKNOWN_STYLE + style);
+    }
+
+    @Override
+    public void drawPathText(String text, Path path, Paint paint) {
+        if (text == null || text.trim().isEmpty()) {
+            return;
+        }
+        if (paint.isTransparent()) {
+            return;
+        }
+
+        AwtPaint awtPaint = AwtGraphicFactory.getPaint(paint);
+        AwtPath awtPath = AwtGraphicFactory.getPath(path);
+
+        if (awtPaint.stroke == null) {
+            this.graphics2D.setColor(awtPaint.color);
+            this.graphics2D.setFont(awtPaint.font);
+        } else {
+            setColorAndStroke(awtPaint);
+        }
+
+        TextStroke textStroke = new TextStroke(text, awtPaint.font, this.graphics2D.getFontRenderContext(), false, false);
+        Style style = awtPaint.style;
+        switch (style) {
+            case FILL:
+                this.graphics2D.fill(textStroke.createStrokedShape(awtPath.path2D));
+                return;
+
+            case STROKE:
+                this.graphics2D.draw(textStroke.createStrokedShape(awtPath.path2D));
                 return;
         }
 
@@ -318,8 +362,26 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
+    public boolean isAntiAlias() {
+        return this.graphics2D.getRenderingHints().containsValue(RenderingHints.VALUE_ANTIALIAS_ON);
+    }
+
+    @Override
+    public boolean isFilterBitmap() {
+        return this.graphics2D.getRenderingHints().containsValue(RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                || this.graphics2D.getRenderingHints().containsValue(RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+    }
+
+    @Override
     public void resetClip() {
         this.graphics2D.setClip(null);
+    }
+
+    @Override
+    public void setAntiAlias(boolean aa) {
+        this.graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa ? RenderingHints.VALUE_ANTIALIAS_ON : RenderingHints.VALUE_ANTIALIAS_OFF);
+        this.graphics2D.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, aa ? RenderingHints.VALUE_TEXT_ANTIALIAS_ON : RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        this.graphics2D.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, aa ? RenderingHints.VALUE_FRACTIONALMETRICS_ON : RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
     }
 
     @Override
@@ -330,7 +392,7 @@ class AwtCanvas implements Canvas {
         } else {
             this.bufferedImage = AwtGraphicFactory.getBitmap(bitmap);
             this.graphics2D = this.bufferedImage.createGraphics();
-            enableAntiAliasing();
+            setAntiAlias(Parameters.ANTI_ALIASING);
             this.graphics2D.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
             this.graphics2D.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
         }
@@ -338,6 +400,11 @@ class AwtCanvas implements Canvas {
 
     @Override
     public void setClip(int left, int top, int width, int height) {
+        setClip(left, top, width, height, false);
+    }
+
+    @Override
+    public void setClip(int left, int top, int width, int height, boolean intersect) {
         this.graphics2D.setClip(left, top, width, height);
     }
 
@@ -346,6 +413,11 @@ class AwtCanvas implements Canvas {
         Area clip = new Area(new Rectangle2D.Double(0, 0, getWidth(), getHeight()));
         clip.subtract(new Area(new Rectangle2D.Double(left, top, width, height)));
         this.graphics2D.setClip(clip);
+    }
+
+    @Override
+    public void setFilterBitmap(boolean filter) {
+        this.graphics2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, filter ? RenderingHints.VALUE_INTERPOLATION_BILINEAR : RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
     }
 
     @Override
@@ -390,12 +462,6 @@ class AwtCanvas implements Canvas {
         this.graphics2D.setComposite(oldComposite);
     }
 
-    private void enableAntiAliasing() {
-        this.graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        this.graphics2D.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        this.graphics2D.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
-    }
-
     private void fillColor(java.awt.Color color) {
         final Composite originalComposite = this.graphics2D.getComposite();
         this.graphics2D.setComposite(AlphaComposite.getInstance(color.getAlpha() == 0 ? AlphaComposite.CLEAR : AlphaComposite.SRC_OVER));
@@ -404,11 +470,10 @@ class AwtCanvas implements Canvas {
         this.graphics2D.setComposite(originalComposite);
     }
 
-    public void setColorAndStroke(AwtPaint awtPaint) {
+    void setColorAndStroke(AwtPaint awtPaint) {
         this.graphics2D.setColor(awtPaint.color);
         if (awtPaint.stroke != null) {
             this.graphics2D.setStroke(awtPaint.stroke);
         }
     }
-
 }

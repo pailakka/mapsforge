@@ -4,7 +4,7 @@ The Mapsforge Map-Writer is a plug-in for the OpenStreetMap Osmosis Tool to conv
 
 This documentation is intended for those who want to create map files for use with mapsforge.
 
-If you have any questions or problems, don't hesitate to ask our public [mapsforge-dev](https://groups.google.com/group/mapsforge-dev) mailing list for help. You can also report bugs and improvement requests via our [issue tracker](https://github.com/mapsforge/mapsforge/issues).
+If you have any questions or problems, don't hesitate to ask our public [forum](https://groups.google.com/group/mapsforge-dev) for help. You can also report bugs and improvement requests via our [issue tracker](https://github.com/mapsforge/mapsforge/issues).
 
 ## Introduction
 
@@ -104,7 +104,7 @@ You need to be aware that this configuration only defines what data is to be inc
 
 ## Changelog
 
-### New since 0.9.0
+### 0.10.0
 
 - Polygon label/symbol centroid
 

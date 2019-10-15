@@ -1,7 +1,7 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2013-2015 Ludwig M Brinckmann
- * Copyright 2016-2017 devemux86
+ * Copyright 2016-2019 devemux86
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -17,12 +17,10 @@
 package org.mapsforge.samples.android;
 
 import android.os.Bundle;
-import android.os.Environment;
-import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
+import androidx.fragment.app.Fragment;
 import org.mapsforge.map.android.util.AndroidUtil;
 import org.mapsforge.map.android.view.MapView;
 import org.mapsforge.map.layer.cache.TileCache;
@@ -118,10 +116,10 @@ public class ItemDetailFragment extends Fragment {
     }
 
     protected File getMapFileDirectory() {
-        return Environment.getExternalStorageDirectory();
+        return getContext().getExternalFilesDir(null);
     }
 
     protected String getMapFileName() {
-        return "germany.map";
+        return "berlin.map";
     }
 }

@@ -1,10 +1,28 @@
 # Changelog
 
-## New since 0.10.0
+## New since 0.12.0
+
+- Fix hillshading on Android 8+ [#1131](https://github.com/mapsforge/mapsforge/pull/1131)
+- Many other minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.13.0)
+
+## Version 0.12.0 (2019-09-17)
+
+- Curved path text rendering [#1112](https://github.com/mapsforge/mapsforge/pull/1112)
+- POI writer: normalize names option [#1123](https://github.com/mapsforge/mapsforge/pull/1123)
+- Layer groups implementation [#1116](https://github.com/mapsforge/mapsforge/issues/1116)
+- Android 10 compatibility [#1120](https://github.com/mapsforge/mapsforge/issues/1120)
+- Many other minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.12.0)
+
+## Version 0.11.0 (2019-03-25)
 
 - Render themes: PNG scaling [#1090](https://github.com/mapsforge/mapsforge/issues/1090)
 - Polyline scaled width [#1088](https://github.com/mapsforge/mapsforge/issues/1088)
 - Hillshading in style menu [#1095](https://github.com/mapsforge/mapsforge/issues/1095)
+- `ThemeCallback.getColor` refactor [#912](https://github.com/mapsforge/mapsforge/issues/912)
+- Parent tiles rendering quality option [#1102](https://github.com/mapsforge/mapsforge/pull/1102)
+  - `Parameters.PARENT_TILES_RENDERING`
 - Many other minor improvements and bug fixes
 - [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.11.0)
 
@@ -54,6 +72,8 @@
 - POI: add named entities option [#949](https://github.com/mapsforge/mapsforge/issues/949)
 - POI: fix multiple POI categories [#940](https://github.com/mapsforge/mapsforge/issues/940)
 - Feature parameters [#994](https://github.com/mapsforge/mapsforge/issues/994)
+  - `FrameBufferController.setUseSquareFrameBuffer` removed
+  - `ReadBuffer.setMaximumBufferSize` removed
 - Writers: Osmosis 0.46 with protobuf 3 [#1002](https://github.com/mapsforge/mapsforge/issues/1002)
 - Gradle 4 / Android plugin 3 support [#1009](https://github.com/mapsforge/mapsforge/issues/1009)
 - Internal render themes various improvements [#857](https://github.com/mapsforge/mapsforge/issues/857)
