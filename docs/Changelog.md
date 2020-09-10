@@ -1,7 +1,20 @@
 # Changelog
 
-## New since 0.12.0
+## New since 0.14.0
 
+- Layer scroll event option [#1163](https://github.com/mapsforge/mapsforge/pull/1163)
+  - `Parameters.LAYER_SCROLL_EVENT`
+- Many other minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.15.0)
+
+## Version 0.14.0 (2020-08-25)
+
+- Many other minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.14.0)
+
+## Version 0.13.0 (2020-01-12)
+
+- Fix marker placement on Android 9+ [#1138](https://github.com/mapsforge/mapsforge/issues/1138)
 - Fix hillshading on Android 8+ [#1131](https://github.com/mapsforge/mapsforge/pull/1131)
 - Many other minor improvements and bug fixes
 - [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.13.0)
