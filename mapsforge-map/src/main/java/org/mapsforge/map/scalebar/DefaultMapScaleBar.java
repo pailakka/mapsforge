@@ -1,7 +1,7 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2014-2019 devemux86
+ * Copyright 2014-2021 devemux86
  * Copyright 2014 Erik Duisters
  * Copyright 2014 Christian Pesch
  *
@@ -20,38 +20,38 @@ package org.mapsforge.map.scalebar;
 
 import org.mapsforge.core.graphics.*;
 import org.mapsforge.map.model.DisplayModel;
-import org.mapsforge.map.model.IMapViewPosition;
 import org.mapsforge.map.model.MapViewDimension;
+import org.mapsforge.map.model.MapViewPosition;
 
 /**
  * Displays the default MapScaleBar.
  */
 public class DefaultMapScaleBar extends MapScaleBar {
-    private static final int BITMAP_HEIGHT = 40;
-    private static final int BITMAP_WIDTH = 120;
-    private static final int DEFAULT_HORIZONTAL_MARGIN = 5;
-    private static final int DEFAULT_VERTICAL_MARGIN = 0;
-    private static final int SCALE_BAR_MARGIN = 10;
-    private static final float STROKE_EXTERNAL = 4;
-    private static final float STROKE_INTERNAL = 2;
-    private static final int TEXT_MARGIN = 1;
+    public static int BITMAP_HEIGHT = 40;
+    public static int BITMAP_WIDTH = 120;
+    public static final int DEFAULT_HORIZONTAL_MARGIN = 5;
+    public static final int DEFAULT_VERTICAL_MARGIN = 0;
+    public static final int SCALE_BAR_MARGIN = 10;
+    public static final float STROKE_EXTERNAL = 4;
+    public static final float STROKE_INTERNAL = 2;
+    public static final int TEXT_MARGIN = 1;
 
     public enum ScaleBarMode {BOTH, SINGLE}
 
     private ScaleBarMode scaleBarMode;
     private DistanceUnitAdapter secondaryDistanceUnitAdapter;
 
-    private final Paint paintScaleBar;
-    private final Paint paintScaleBarStroke;
-    private final Paint paintScaleText;
-    private final Paint paintScaleTextStroke;
+    protected final Paint paintScaleBar;
+    protected final Paint paintScaleBarStroke;
+    protected final Paint paintScaleText;
+    protected final Paint paintScaleTextStroke;
 
-    public DefaultMapScaleBar(IMapViewPosition mapViewPosition, MapViewDimension mapViewDimension,
+    public DefaultMapScaleBar(MapViewPosition mapViewPosition, MapViewDimension mapViewDimension,
                               GraphicFactory graphicFactory, DisplayModel displayModel) {
         this(mapViewPosition, mapViewDimension, graphicFactory, displayModel, displayModel.getScaleFactor());
     }
 
-    public DefaultMapScaleBar(IMapViewPosition mapViewPosition, MapViewDimension mapViewDimension,
+    public DefaultMapScaleBar(MapViewPosition mapViewPosition, MapViewDimension mapViewDimension,
                               GraphicFactory graphicFactory, DisplayModel displayModel, float scale) {
         super(mapViewPosition, mapViewDimension, displayModel, graphicFactory, (int) (BITMAP_WIDTH * scale), (int) (BITMAP_HEIGHT * scale), scale);
 
@@ -65,6 +65,11 @@ public class DefaultMapScaleBar extends MapScaleBar {
         this.paintScaleBarStroke = createScaleBarPaint(Color.WHITE, STROKE_EXTERNAL, Style.STROKE);
         this.paintScaleText = createTextPaint(Color.BLACK, 0, Style.FILL);
         this.paintScaleTextStroke = createTextPaint(Color.WHITE, 2, Style.STROKE);
+    }
+
+    public void setColor(int color) {
+        this.paintScaleBar.setColor(color);
+        this.paintScaleText.setColor(color);
     }
 
     /**
@@ -101,7 +106,7 @@ public class DefaultMapScaleBar extends MapScaleBar {
         paint.setColor(color);
         paint.setStrokeWidth(strokeWidth * this.scale);
         paint.setStyle(style);
-        paint.setStrokeCap(Cap.SQUARE);
+        paint.setStrokeCap(Cap.ROUND);
         return paint;
     }
 
@@ -138,7 +143,7 @@ public class DefaultMapScaleBar extends MapScaleBar {
         drawScaleText(canvas, scaleText1, scaleText2, this.paintScaleText, this.scale);
     }
 
-    private void drawScaleBar(Canvas canvas, int scaleBarLength1, int scaleBarLength2, Paint paint, float scale) {
+    protected void drawScaleBar(Canvas canvas, int scaleBarLength1, int scaleBarLength2, Paint paint, float scale) {
         int maxScaleBarLength = Math.max(scaleBarLength1, scaleBarLength2);
 
         switch (scaleBarPosition) {
@@ -259,7 +264,7 @@ public class DefaultMapScaleBar extends MapScaleBar {
         }
     }
 
-    private void drawScaleText(Canvas canvas, String scaleText1, String scaleText2, Paint paint, float scale) {
+    protected void drawScaleText(Canvas canvas, String scaleText1, String scaleText2, Paint paint, float scale) {
         switch (scaleBarPosition) {
             case BOTTOM_CENTER:
                 if (scaleText2.length() == 0) {

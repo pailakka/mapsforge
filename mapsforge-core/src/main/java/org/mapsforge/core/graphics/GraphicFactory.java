@@ -41,7 +41,7 @@ public interface GraphicFactory {
     /**
      * Create a single channel bitmap for hillshading, may include a buffer.
      */
-    HillshadingBitmap createMonoBitmap(int width, int height, byte[] buffer, int padding, BoundingBox area);
+    HillshadingBitmap createMonoBitmap(int width, int height, byte[] buffer, int padding, BoundingBox area, int color);
 
     Paint createPaint();
 
@@ -49,7 +49,8 @@ public interface GraphicFactory {
 
     Path createPath();
 
-    PointTextContainer createPointTextContainer(Point xy, Display display, int priority, String text, Paint paintFront, Paint paintBack,
+    PointTextContainer createPointTextContainer(Point xy, double horizontalOffset, double verticalOffset,
+                                                Display display, int priority, String text, Paint paintFront, Paint paintBack,
                                                 SymbolContainer symbolContainer, Position position, int maxTextWidth);
 
     ResourceBitmap createResourceBitmap(InputStream inputStream, float scaleFactor, int width, int height, int percent, int hash) throws IOException;

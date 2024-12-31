@@ -17,14 +17,12 @@
  */
 package org.mapsforge.samples.android.cluster;
 
-import android.os.AsyncTask;
 import android.widget.Toast;
-
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Point;
 import org.mapsforge.map.model.DisplayModel;
-import org.mapsforge.map.model.IMapViewPosition;
+import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.model.common.Observer;
 import org.mapsforge.map.view.MapView;
 
@@ -48,6 +46,7 @@ import java.util.List;
  * <p/>
  * Should be added as Observer on Mapsforge frameBufferModel.
  */
+@SuppressWarnings("deprecation")
 public class ClusterManager<T extends GeoItem> implements Observer, SelectionHandler<T> {
     /**
      * A 'Toast' to display information, intended to show information on {@link ClusterMarker}
@@ -104,7 +103,7 @@ public class ClusterManager<T extends GeoItem> implements Observer, SelectionHan
      * saves the actual Center as LatLong of the MapViewPosition
      */
     private LatLong oldCenterLatLong;
-    private AsyncTask<Boolean, Void, Void> clusterTask;
+    private android.os.AsyncTask<Boolean, Void, Void> clusterTask;
     private boolean ignoreOnTapCallBack;
 
     /**
@@ -215,11 +214,11 @@ public class ClusterManager<T extends GeoItem> implements Observer, SelectionHan
                     Point ptCenter = mapView.getMapViewProjection().toPixels(gpCenter);
                     // find a cluster which contains the marker.
                     if (pos.distance(ptCenter) <= GRIDSIZE
-                    /*
-                     * pos.x >= ptCenter.x - GRIDSIZE && pos.x <= ptCenter.x +
-                     * GRIDSIZE && pos.y >= ptCenter.y - GRIDSIZE && pos.y <=
-                     * ptCenter.y + GRIDSIZE
-                     */) {
+                        /*
+                         * pos.x >= ptCenter.x - GRIDSIZE && pos.x <= ptCenter.x +
+                         * GRIDSIZE && pos.y >= ptCenter.y - GRIDSIZE && pos.y <=
+                         * ptCenter.y + GRIDSIZE
+                         */) {
                         mCluster.addItem(item);
                         return;
                     }
@@ -351,7 +350,7 @@ public class ClusterManager<T extends GeoItem> implements Observer, SelectionHan
             resetViewport(false);
         } else {
             // react on position changes
-            IMapViewPosition mapViewPosition = mapView.getModel().mapViewPosition;
+            MapViewPosition mapViewPosition = mapView.getModel().mapViewPosition;
 
             Point posOld = mapView.getMapViewProjection().toPixels(oldCenterLatLong);
             Point posNew = mapView.getMapViewProjection().toPixels(mapViewPosition.getCenter());
@@ -405,7 +404,7 @@ public class ClusterManager<T extends GeoItem> implements Observer, SelectionHan
         return this.ignoreOnTapCallBack;
     }
 
-    private class ClusterTask extends AsyncTask<Boolean, Void, Void> {
+    private class ClusterTask extends android.os.AsyncTask<Boolean, Void, Void> {
 
         @Override
         protected Void doInBackground(Boolean... params) {

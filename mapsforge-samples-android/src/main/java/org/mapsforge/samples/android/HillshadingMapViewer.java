@@ -1,6 +1,7 @@
 /*
- * Copyright 2017 usrusr
+ * Copyright 2017-2022 usrusr
  * Copyright 2017-2019 devemux86
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -15,13 +16,14 @@
  */
 package org.mapsforge.samples.android;
 
+import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory;
-import org.mapsforge.map.layer.hills.HillsRenderConfig;
-import org.mapsforge.map.layer.hills.MemoryCachingHgtReaderTileSource;
-import org.mapsforge.map.layer.hills.SimpleShadingAlgorithm;
+import org.mapsforge.map.android.hills.DemFolderAndroidContent;
+import org.mapsforge.map.layer.hills.*;
 
 import java.io.File;
 
@@ -29,20 +31,73 @@ import java.io.File;
  * Standard map view with hill shading.
  */
 public class HillshadingMapViewer extends DefaultTheme {
-    private File demFolder;
     private HillsRenderConfig hillsConfig;
+    /**
+     * holds the DEM folder URI in a quick and dirty "reboot" after selection
+     */
+    private static final String demFolderKey = "demFolderUri";
+    private static final String demUseFiles = "demFolderFiles";
+    private static final int SELECT_DEM_FOLDER = 0;
 
+    @SuppressWarnings("deprecation")
     @Override
     protected void createLayers() {
-        demFolder = new File(getMapFileDirectory(), "dem");
 
-        if (!(demFolder.exists() && demFolder.isDirectory() && demFolder.canRead() && demFolder.listFiles().length > 0)) {
-            hillsConfig = null;
-        } else {
-            // minimum setup for hillshading
-            MemoryCachingHgtReaderTileSource hillTileSource = new MemoryCachingHgtReaderTileSource(demFolder, new SimpleShadingAlgorithm(), AndroidGraphicFactory.INSTANCE);
-            customizeConfig(hillTileSource);
+        DemFolder anyDems = null;
+        Uri demUri = getIntent().getParcelableExtra(demFolderKey);
+        boolean demFiles = getIntent().getBooleanExtra(demUseFiles, false);
+
+        File demFolder = new File(getMapFileDirectory(), "dem");
+        if (demFiles) {
+            anyDems = new DemFolderFS(demFolder);
+        } else if (demUri != null) {
+            anyDems = new DemFolderAndroidContent(demUri, this, getContentResolver());
+        }
+        if (anyDems == null) {
+
+
+            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+            alert.setTitle("Select DEM source (srtm hgt files) for hillshading:");
+
+
+            String fileState = !demFolder.exists() ? "(does not exist)" :
+                    !demFolder.isDirectory() ? "(not a directory)" :
+                            !demFolder.canRead() ? "(cannot read)" :
+                                    demFolder.listFiles() == null ? "(null files)" :
+                                            ("(" + demFolder.listFiles().length + " files)");
+            alert.setItems(new CharSequence[]{
+                    "\nFile access (only older android) " + getMapFileDirectory() + "/dem " + fileState + "\n",
+                    "\nSelect DEM folder for ContentResolver\n"
+            }, (dialog, which) -> {
+                if (which == 0) {
+                    // "reboot" with demUseFiles=true
+                    Intent intent = (Intent) getIntent().clone();
+                    intent.putExtra(demUseFiles, true);
+                    setIntent(intent);
+                    recreate();
+                } else if (which == 1) {
+                    startSelect();
+                }
+            });
+
+
+            alert.show();
+        }
+        if (anyDems != null) {
+            final AdaptiveClasyHillShading algorithm = new AdaptiveClasyHillShading()
+                    // You can make additional behavior adjustments
+                    .setAdaptiveZoomEnabled(true)
+                    // .setZoomMinOverride(0)
+                    // .setZoomMaxOverride(17)
+                    .setCustomQualityScale(1);
+
+            MemoryCachingHgtReaderTileSource hillTileSource = new MemoryCachingHgtReaderTileSource(anyDems, algorithm, AndroidGraphicFactory.INSTANCE);
+
             hillsConfig = new HillsRenderConfig(hillTileSource);
+
+            // You can override theme values:
+            // hillsConfig.setMagnitudeScaleFactor(1);
+            // hillsConfig.setColor(0xff000000);
 
             // call after setting/changing parameters, walks filesystem for DEM metadata
             hillsConfig.indexOnThread();
@@ -51,30 +106,52 @@ public class HillshadingMapViewer extends DefaultTheme {
         super.createLayers();
     }
 
-    private void customizeConfig(MemoryCachingHgtReaderTileSource hillTileSource) {
-        hillTileSource.setEnableInterpolationOverlap(true);
-    }
-
     @Override
     protected HillsRenderConfig getHillsRenderConfig() {
         return hillsConfig;
     }
 
+
+    private void startSelect() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+        );
+
+        startActivityForResult(intent, SELECT_DEM_FOLDER);
+
+        hillsConfig = null;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == SELECT_DEM_FOLDER) try {
+            if (resultCode != Activity.RESULT_OK || data == null) {
+                return;
+            }
+
+            // we "reboot" our activity because createLayers runs so early
+            Intent ourIntent = getIntent();
+
+            Uri demUri = data.getData();
+
+            getContentResolver().takePersistableUriPermission(demUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            Intent intent = (Intent) ourIntent.clone();
+
+            intent.putExtra(demFolderKey, demUri);
+            setIntent(intent);
+            recreate();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            throw e;
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        if (hillsConfig == null) {
-            AlertDialog.Builder alert = new AlertDialog.Builder(this);
-            alert.setTitle("Hillshading demo needs SRTM hgt files");
-            alert.setMessage("Currently looking in: " + demFolder);
-            alert.setOnCancelListener(new DialogInterface.OnCancelListener() {
-                @Override
-                public void onCancel(DialogInterface dialogInterface) {
-                    finish();
-                }
-            });
-            alert.show();
-        }
     }
 }

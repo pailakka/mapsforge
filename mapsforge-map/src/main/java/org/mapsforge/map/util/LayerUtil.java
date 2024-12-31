@@ -1,6 +1,7 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014-2015 Ludwig M Brinckmann
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -18,28 +19,31 @@ package org.mapsforge.map.util;
 import org.mapsforge.core.mapelements.MapElementContainer;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.model.Tile;
 import org.mapsforge.core.util.MercatorProjection;
 import org.mapsforge.map.layer.TilePosition;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public final class LayerUtil {
 
     public static List<TilePosition> getTilePositions(BoundingBox boundingBox, byte zoomLevel, Point topLeftPoint,
                                                       int tileSize) {
-        int tileLeft = MercatorProjection.longitudeToTileX(boundingBox.minLongitude, zoomLevel);
-        int tileTop = MercatorProjection.latitudeToTileY(boundingBox.maxLatitude, zoomLevel);
-        int tileRight = MercatorProjection.longitudeToTileX(boundingBox.maxLongitude, zoomLevel);
-        int tileBottom = MercatorProjection.latitudeToTileY(boundingBox.minLatitude, zoomLevel);
+        return getTilePositions(boundingBox, zoomLevel, topLeftPoint, tileSize, 0);
+    }
+
+    public static List<TilePosition> getTilePositions(BoundingBox boundingBox, byte zoomLevel, Point topLeftPoint,
+                                                      int tileSize, int margin) {
+        int maxTileNumber = Tile.getMaxTileNumber(zoomLevel);
+        int tileLeft = Math.max(0, MercatorProjection.longitudeToTileX(boundingBox.minLongitude, zoomLevel) - margin);
+        int tileTop = Math.max(0, MercatorProjection.latitudeToTileY(boundingBox.maxLatitude, zoomLevel) - margin);
+        int tileRight = Math.min(MercatorProjection.longitudeToTileX(boundingBox.maxLongitude, zoomLevel) + margin, maxTileNumber);
+        int tileBottom = Math.min(MercatorProjection.latitudeToTileY(boundingBox.minLatitude, zoomLevel) + margin, maxTileNumber);
 
         int initialCapacity = (tileRight - tileLeft + 1) * (tileBottom - tileTop + 1);
-        List<TilePosition> tilePositions = new ArrayList<TilePosition>(initialCapacity);
+        List<TilePosition> tilePositions = new ArrayList<>(initialCapacity);
 
         for (int tileY = tileTop; tileY <= tileBottom; ++tileY) {
             for (int tileX = tileLeft; tileX <= tileRight; ++tileX) {
@@ -82,7 +86,7 @@ public final class LayerUtil {
     }
 
     public static Set<Tile> getTiles(Tile upperLeft, Tile lowerRight) {
-        Set<Tile> tiles = new HashSet<Tile>();
+        Set<Tile> tiles = new HashSet<>();
         for (int tileY = upperLeft.tileY; tileY <= lowerRight.tileY; ++tileY) {
             for (int tileX = upperLeft.tileX; tileX <= lowerRight.tileX; ++tileX) {
                 tiles.add(new Tile(tileX, tileY, upperLeft.zoomLevel, upperLeft.tileSize));
@@ -97,7 +101,7 @@ public final class LayerUtil {
         int tileRight = MercatorProjection.longitudeToTileX(boundingBox.maxLongitude, zoomLevel);
         int tileBottom = MercatorProjection.latitudeToTileY(boundingBox.minLatitude, zoomLevel);
 
-        Set<Tile> tiles = new HashSet<Tile>();
+        Set<Tile> tiles = new HashSet<>();
 
         for (int tileY = tileTop; tileY <= tileBottom; ++tileY) {
             for (int tileX = tileLeft; tileX <= tileRight; ++tileX) {
@@ -115,26 +119,139 @@ public final class LayerUtil {
      * @param input list of MapElements
      * @return collision-free, ordered list, a subset of the input.
      */
+    public static List<MapElementContainer> collisionFreeOrdered(List<MapElementContainer> input, Rotation rotation, boolean ascendingOrder) {
+        final LinkedList<MapElementContainer> output = new LinkedList<>();
 
-    public static List<MapElementContainer> collisionFreeOrdered(List<MapElementContainer> input) {
         // sort items by priority (highest first)
         Collections.sort(input, Collections.reverseOrder());
-        // in order of priority, see if an item can be drawn, i.e. none of the items
+
+        // in order of display and priority, see if an item can be drawn, i.e. none of the items
         // in the currentItemsToDraw list clashes with it.
-        List<MapElementContainer> output = new LinkedList<MapElementContainer>();
         for (MapElementContainer item : input) {
             boolean hasSpace = true;
             for (MapElementContainer outputElement : output) {
-                if (outputElement.clashesWith(item)) {
+                if (outputElement.clashesWith(item, rotation)) {
                     hasSpace = false;
                     break;
                 }
             }
             if (hasSpace) {
-                output.add(item);
+                if (ascendingOrder) {
+                    output.addFirst(item);
+                } else {
+                    output.add(item);
+                }
             }
         }
+
         return output;
+    }
+
+    /**
+     * Transforms a list of MapElements, orders it and removes those elements that overlap.
+     * This operation is useful for an early elimination of elements in a list that will never
+     * be drawn because they overlap.
+     *
+     * @param input list of MapElements
+     * @return collision-free, ordered list, a subset of the input.
+     */
+    public static List<MapElementContainer> collisionFreeOrdered(List<MapElementContainer> input, Rotation rotation) {
+        return collisionFreeOrdered(input, rotation, true);
+    }
+
+    /**
+     * Transforms a list of MapElements, orders it and removes those elements that overlap.
+     * Also removes labels that span more than one tile if their position could be contested
+     * by another label of the same or higher priority.
+     */
+    public static List<MapElementContainer> collisionAndContestingFreeOrdered(List<MapElementContainer> input, Tile tile, Rotation rotation, boolean ascendingOrder) {
+        final LinkedList<MapElementContainer> output = new LinkedList<>();
+
+        Collections.sort(input, Collections.reverseOrder());
+
+        final List<MapElementContainer> inputProcessed = omitContestingMultiTiledItems(input, tile, rotation);
+
+        // in order of display and priority, see if an item can be drawn, i.e. none of the items
+        // in the currentItemsToDraw list clashes with it.
+        for (MapElementContainer item : inputProcessed) {
+            boolean hasSpace = true;
+            for (MapElementContainer outputElement : output) {
+                if (item.clashesWith(outputElement, rotation)) {
+                    hasSpace = false;
+                    break;
+                }
+            }
+            if (hasSpace) {
+                if (ascendingOrder) {
+                    output.addFirst(item);
+                } else {
+                    output.add(item);
+                }
+            }
+        }
+
+        return output;
+    }
+
+    /**
+     * Transforms a list of MapElements, orders it and removes those elements that overlap.
+     * Also removes labels that span more than one tile if their position could be contested
+     * by another label of the same or higher priority.
+     */
+    public static List<MapElementContainer> collisionAndContestingFreeOrdered(List<MapElementContainer> input, Tile tile, Rotation rotation) {
+        return collisionAndContestingFreeOrdered(input, tile, rotation, true);
+    }
+
+    /**
+     * Omit labels that span more than one tile if their position could be contested
+     * by another label of the same or higher priority.
+     * <p>
+     * Note: Input is assumed to already be sorted by priority (at least).
+     */
+    public static List<MapElementContainer> omitContestingMultiTiledItems(Collection<MapElementContainer> input, Tile tile, Rotation rotation) {
+        final List<MapElementContainer> output = new ArrayList<>();
+
+        final Rectangle tileRect = tile.getBoundaryAbsolute();
+
+        for (MapElementContainer mainItem : input) {
+            boolean toRetain = true;
+            if (isLabelMultiTiled(mainItem.getClashRect(rotation), tileRect)) {
+                for (MapElementContainer otherItem : input) {
+                    if (otherItem.getPriority() >= mainItem.getPriority()) {
+                        if (!mainItem.equals(otherItem) && mainItem.clashesWith(otherItem, rotation)) {
+                            toRetain = false;
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+            if (toRetain) {
+                output.add(mainItem);
+            }
+        }
+
+        return output;
+    }
+
+    public static void removeInvisibleItems(Collection<MapElementContainer> input) {
+        Iterator<MapElementContainer> iterator = input.iterator();
+
+        while (iterator.hasNext()) {
+            MapElementContainer label = iterator.next();
+            if (label.isNotVisible()) {
+                iterator.remove();
+            }
+        }
+    }
+
+    /**
+     * @return {@code true} if the label is only partially contained within the given tile rectangle;
+     * {@code false} if it's entirely contained or not contained at all
+     */
+    public static boolean isLabelMultiTiled(Rectangle labelRect, Rectangle tileRect) {
+        return !tileRect.contains(labelRect) && tileRect.intersects(labelRect);
     }
 
     private LayerUtil() {

@@ -1,8 +1,6 @@
 # RenderTheme
 
-**This article describes how to use XML-based renderthemes to style maps, including the extensions of Rendertheme V4 or newer (new with release 0.5).**
-
-If you have any questions or problems, don't hesitate to ask our public [forum](https://groups.google.com/group/mapsforge-dev) for help.
+This article describes how to use XML-based renderthemes to style maps, including the extensions of Rendertheme V4 or newer.
 
 ## Introduction
 
@@ -42,8 +40,8 @@ A rule element has several attributes to specify which map elements the rule mat
 |**Attribute**|**Valid values**|**Description**|**Required**|
 |-------------|----------------|---------------|------------|
 |e|<ul><li>node</li><li>way</li><li>any</li></ul>|Defines which map element type will be matched.|yes|
-|k|[string](http://www.w3.org/TR/xmlschema-2/#string)|The key of the tile source tag. <ul><li>A vertical bar "\|" can be used to specify multiple keys.</li><li>An asterisk "`*`" serves as wildcard character.</li>|yes|
-|v|[string](http://www.w3.org/TR/xmlschema-2/#string)|The value of the tile source tag. <ul><li>A vertical bar "\|" can be used to specify multiple values.</li><li>An asterisk "`*`" serves as wildcard character.</li><li>A tilde "~" matches if the map element does not have a tag with the specified key.</li>|yes|
+|k|[string](http://www.w3.org/TR/xmlschema-2/#string)|The key of the tile source tag. <ul><li>A vertical bar "`\|`" can be used to specify multiple keys.</li><li>An asterisk "`*`" serves as wildcard character.</li>|yes|
+|v|[string](http://www.w3.org/TR/xmlschema-2/#string)|The value of the tile source tag. <ul><li>A vertical bar "`\|`" can be used to specify multiple values.</li><li>An asterisk "`*`" serves as wildcard character.</li><li>A minus sign "`-`" excludes the other values after "`\|`". It never works alone.</li><li>A tilde "`~`" matches if the map element does not have a tag with the specified key.</li>|yes|
 |closed|<ul><li>yes</li><li>no</li><li>any</li></ul>|Defines which ways will be matched. A way is considered as closed if its first node and its last node are equal.|no (default is *any*)|
 |zoom-min|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The minimum zoom level on which the rule will be matched.|no (default is 0)|
 |zoom-max|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The maximum zoom level on which the rule will be matched.|no (default is 127)|
@@ -104,7 +102,7 @@ But if you want to develop your renderthemes further, Rendertheme V4 offers a nu
     xsi:schemaLocation="http://mapsforge.org/renderTheme renderTheme.xsd" version="5" map-background="#f8f8f8" map-background-outside="#dddddd">
 ```
 
-###Header Elements
+### Header Elements
  
 The following header elements can be used:
  - version: should be "4" or newer now.
@@ -323,3 +321,6 @@ A simple SVG symbol for a cemetery can look like this:
     <g transform="translate(30,140)"><use xlink:href="#cross"/></g>
 </svg>
 ```
+## Known Pitfalls
+
+- There is a potential issue with tile grid artifacts inside areas at zoom levels 12-13, specially if they have stroke or semi-transparent fill. To solve this you can try a non-transparent fill without stroke or a pattern.

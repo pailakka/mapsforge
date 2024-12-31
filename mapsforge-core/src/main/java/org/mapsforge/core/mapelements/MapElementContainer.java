@@ -1,6 +1,7 @@
 /*
  * Copyright 2014 Ludwig M Brinckmann
  * Copyright 2016 devemux86
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -13,15 +14,14 @@
  * You should have received a copy of the GNU Lesser General Public License along with
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.mapsforge.core.mapelements;
 
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Display;
-import org.mapsforge.core.graphics.Filter;
 import org.mapsforge.core.graphics.Matrix;
 import org.mapsforge.core.model.Point;
 import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.model.Rotation;
 
 /**
  * The MapElementContainer is the abstract base class for annotations that can be placed on the
@@ -37,11 +37,12 @@ import org.mapsforge.core.model.Rectangle;
  * drawn.
  */
 public abstract class MapElementContainer implements Comparable<MapElementContainer> {
-    protected Rectangle boundary;
     protected Rectangle boundaryAbsolute;
-    protected Display display;
+    protected final Display display;
     protected final int priority;
     protected final Point xy;
+    protected volatile double clashRotationDegrees;
+    protected volatile Rectangle clashRect;
 
     protected MapElementContainer(Point xy, Display display, int priority) {
         this.xy = xy;
@@ -49,11 +50,11 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
         this.priority = priority;
     }
 
+    protected abstract Rectangle getBoundary();
+
     /**
-     * Compares elements according to their priority.
-     *
-     * @param other
-     * @return priority order
+     * Compares elements according to their priority, then display, then position.
+     * The compare is consistent with equals.
      */
     @Override
     public int compareTo(MapElementContainer other) {
@@ -63,7 +64,31 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
         if (this.priority > other.priority) {
             return 1;
         }
-        return 0;
+
+        if (this.display != other.display) {
+            if (this.display != Display.ALWAYS && other.display == Display.ALWAYS) {
+                return -1;
+            }
+            if (this.display == Display.ALWAYS) {
+                return 1;
+            }
+
+            switch (this.display) {
+                case NEVER:
+                    return -1;
+                case IFSPACE:
+                    return 1;
+                default:
+                    throw new IllegalArgumentException("Unknown Display state for MapElementContainer.compareTo()");
+            }
+        }
+
+        // If the priorities and display are the same, make a more detailed ordering.
+        // Basically we don't want to allow two elements to be arbitrarily ordered,
+        // because that makes drawing the elements non-deterministic.
+        // This also makes the natural ordering of elements consistent with equals,
+        // as it should be.
+        return xy.compareTo(other.xy);
     }
 
     @Override
@@ -76,6 +101,8 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
         MapElementContainer other = (MapElementContainer) obj;
         if (this.priority != other.priority) {
             return false;
+        } else if (this.display != other.display) {
+            return false;
         } else if (!this.xy.equals(other.xy)) {
             return false;
         }
@@ -84,9 +111,9 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
 
     /**
      * Drawing method: element will draw itself on canvas shifted by origin point of canvas and
-     * using the matrix if rotation is required. Additionally a color filter can be applied.
+     * using the matrix if rotation is required.
      */
-    public abstract void draw(Canvas canvas, Point origin, Matrix matrix, Filter filter);
+    public abstract void draw(Canvas canvas, Point origin, Matrix matrix, Rotation rotation);
 
     /**
      * Gets the pixel absolute boundary for this element.
@@ -95,13 +122,15 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
      */
     protected Rectangle getBoundaryAbsolute() {
         if (boundaryAbsolute == null) {
-            boundaryAbsolute = this.boundary.shift(xy);
+            boundaryAbsolute = this.getBoundary().shift(xy);
         }
         return boundaryAbsolute;
     }
 
-    public boolean intersects(Rectangle rectangle) {
-        return this.getBoundaryAbsolute().intersects(rectangle);
+    public boolean intersects(Rectangle rectangle, Rotation rotation) {
+        Rectangle rect = this.getClashRect(rotation);
+
+        return rect != null && rect.intersects(rectangle);
     }
 
     /**
@@ -110,12 +139,52 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
      * @param other element to test against
      * @return true if they overlap
      */
-    public boolean clashesWith(MapElementContainer other) {
-        // if either of the elements is always drawn, the elements do not clash
-        if (Display.ALWAYS == this.display || Display.ALWAYS == other.display) {
+    public boolean clashesWith(MapElementContainer other, Rotation rotation) {
+        // If exactly one of the elements is always drawn, the elements do not clash, otherwise do more checks
+        if (Display.ALWAYS == this.display ^ Display.ALWAYS == other.display) {
             return false;
         }
-        return this.getBoundaryAbsolute().intersects(other.getBoundaryAbsolute());
+
+        Rectangle rect1 = this.getClashRect(rotation);
+        Rectangle rect2 = other.getClashRect(rotation);
+
+        if (rect1 != null && rect1.intersects(rect2)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public Rectangle getClashRect(Rotation rotation) {
+        final MapElementContainer pointTextContainer = this;
+
+        Rectangle output = null;
+
+        if (getBoundary() != null) {
+            // All other fields used are final (read only)
+            if (rotation.degrees == pointTextContainer.clashRotationDegrees && pointTextContainer.clashRect != null) {
+                return pointTextContainer.clashRect;
+            }
+
+            final Rotation newRotation = new Rotation(rotation.degrees, 0, 0);
+
+            // We work in the absolute coordinate space of the map (intentionally)
+            double x = pointTextContainer.xy.x;
+            double y = pointTextContainer.xy.y;
+
+            if (!Rotation.noRotation(newRotation)) {
+                Point rotated = newRotation.rotate(x, y, true);
+                x = rotated.x;
+                y = rotated.y;
+            }
+
+            output = new Rectangle(x + getBoundary().left, y + getBoundary().top, x + getBoundary().right, y + getBoundary().bottom);
+
+            pointTextContainer.clashRect = output;
+            pointTextContainer.clashRotationDegrees = newRotation.degrees;
+        }
+
+        return output;
     }
 
     @Override
@@ -137,6 +206,13 @@ public abstract class MapElementContainer implements Comparable<MapElementContai
 
     public int getPriority() {
         return priority;
+    }
+
+    /**
+     * @return {@code true} if this is definitely not visible; {@code false} if it may or may not be visible
+     */
+    public boolean isNotVisible() {
+        return Display.NEVER == this.display;
     }
 
     @Override

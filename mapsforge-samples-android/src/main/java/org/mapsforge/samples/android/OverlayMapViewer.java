@@ -16,43 +16,58 @@
 package org.mapsforge.samples.android;
 
 import android.graphics.BitmapFactory;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import org.mapsforge.core.graphics.Color;
 import org.mapsforge.core.graphics.Paint;
 import org.mapsforge.core.graphics.Style;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.map.android.graphics.AndroidBitmap;
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory;
+import org.mapsforge.map.layer.Layer;
 import org.mapsforge.map.layer.Layers;
-import org.mapsforge.map.layer.overlay.*;
-
-import java.util.ArrayList;
-import java.util.List;
+import org.mapsforge.map.layer.ZOrderGroupLayer;
+import org.mapsforge.map.layer.overlay.Circle;
+import org.mapsforge.map.layer.overlay.FixedPixelCircle;
+import org.mapsforge.map.layer.overlay.Marker;
+import org.mapsforge.map.layer.overlay.Polygon;
+import org.mapsforge.map.layer.overlay.Polyline;
 
 /**
- * Map viewer with a few overlays added.
+ * Map viewer with a few overlays added and map rotation.
  */
-public class OverlayMapViewer extends DefaultTheme {
+public class OverlayMapViewer extends DownloadLayerViewer {
 
-    protected LatLong latLong1 = new LatLong(52.5, 13.4);
-    protected LatLong latLong2 = new LatLong(52.499, 13.402);
-    protected LatLong latLong3 = new LatLong(52.503, 13.399);
-    protected LatLong latLong4 = new LatLong(52.51, 13.401);
-    protected LatLong latLong5 = new LatLong(52.508, 13.408);
-    protected LatLong latLong6 = new LatLong(52.515, 13.420);
-    protected LatLong latLong7 = new LatLong(52.51, 13.41);
-    protected LatLong latLong8 = new LatLong(52.51, 13.42);
-    protected LatLong latLong9 = new LatLong(52.52, 13.43);
+    private final LatLong latLong1 = new LatLong(52.5, 13.4);
+    private final LatLong latLong2 = new LatLong(52.499, 13.402);
+    private final LatLong latLong3 = new LatLong(52.503, 13.399);
+    private final LatLong latLong4 = new LatLong(52.51, 13.401);
+    private final LatLong latLong5 = new LatLong(52.508, 13.408);
+    private final LatLong latLong6 = new LatLong(52.515, 13.420);
+    private final LatLong latLong7 = new LatLong(52.51, 13.41);
+    private final LatLong latLong8 = new LatLong(52.51, 13.42);
+    private final LatLong latLong9 = new LatLong(52.52, 13.43);
+    private final LatLong latLong10 = new LatLong(52.514, 13.413);
+    private final LatLong latLong11 = new LatLong(52.514, 13.423);
+    private final LatLong latLong12 = new LatLong(52.524, 13.433);
+    private final LatLong latLong13 = new LatLong(52.516, 13.4145);
+    private final LatLong latLong14 = new LatLong(52.516, 13.4245);
+    private final LatLong latLong15 = new LatLong(52.526, 13.4345);
 
-    protected LatLong latLong10 = new LatLong(52.514, 13.413);
-    protected LatLong latLong11 = new LatLong(52.514, 13.423);
-    protected LatLong latLong12 = new LatLong(52.524, 13.433);
-    protected LatLong latLong13 = new LatLong(52.516, 13.4145);
-    protected LatLong latLong14 = new LatLong(52.516, 13.4245);
-    protected LatLong latLong15 = new LatLong(52.526, 13.4345);
+    private final LatLong anchorPolygonWithHoles = new LatLong(52.499, 13.430);
+    private final LatLong anchorZOrderObjects = new LatLong(52.499, 13.450);
 
-    protected void addOverlayLayers(Layers layers) {
+    private float rotationAngle;
+
+    private void addOverlayLayers(Layers layers) {
 
         Polyline polyline = new Polyline(Utils.createPaint(
                 AndroidGraphicFactory.INSTANCE.createColor(Color.BLUE),
@@ -71,8 +86,17 @@ public class OverlayMapViewer extends DefaultTheme {
 
         Polyline polylineWithShader = new Polyline(shaderPaint, AndroidGraphicFactory.INSTANCE, true) {
             @Override
+            public boolean onLongPress(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (contains(tapXY, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Polyline long press\n" + tapLatLong, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
             public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
-                if (contains(tapXY, mapView.getMapViewProjection())) {
+                if (contains(tapXY, mapView)) {
                     Toast.makeText(OverlayMapViewer.this, "Polyline tap\n" + tapLatLong, Toast.LENGTH_SHORT).show();
                     return true;
                 }
@@ -93,8 +117,17 @@ public class OverlayMapViewer extends DefaultTheme {
                 Style.STROKE);
         Polygon polygon = new Polygon(paintFill, paintStroke, AndroidGraphicFactory.INSTANCE) {
             @Override
+            public boolean onLongPress(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (contains(tapXY, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Polygon long press\n" + tapLatLong, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
             public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
-                if (contains(tapLatLong)) {
+                if (contains(tapXY, mapView)) {
                     Toast.makeText(OverlayMapViewer.this, "Polygon tap\n" + tapLatLong, Toast.LENGTH_SHORT).show();
                     return true;
                 }
@@ -143,39 +176,42 @@ public class OverlayMapViewer extends DefaultTheme {
         latLongs5.add(latLong13);
         polygonWithShaderAligned.setPoints(latLongs5);
 
-        Marker marker1 = Utils.createTappableMarker(this,
-                R.drawable.marker_red, latLong1);
+        Marker marker1 = Utils.createTappableMarker(this, R.drawable.marker_red, latLong1, mapView);
 
-        Circle circle = new Circle(latLong3, 100, Utils.createPaint(
-                AndroidGraphicFactory.INSTANCE.createColor(Color.WHITE), 0,
-                Style.FILL), null) {
+        Circle circle = new Circle(latLong3, 100, Utils.createPaint(AndroidGraphicFactory.INSTANCE.createColor(Color.WHITE), 0, Style.FILL), null) {
             @Override
-            public boolean onTap(LatLong geoPoint, Point viewPosition,
-                                 Point tapPoint) {
-                if (this.contains(viewPosition, tapPoint, geoPoint.latitude,
-                        mapView.getModel().mapViewPosition.getZoomLevel())) {
-                    Toast.makeText(OverlayMapViewer.this,
-                            "The Circle was tapped " + geoPoint.toString(),
-                            Toast.LENGTH_SHORT).show();
+            public boolean onLongPress(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (this.contains(layerXY, tapXY, tapLatLong.latitude, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Circle long press\n" + tapLatLong, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (this.contains(layerXY, tapXY, tapLatLong.latitude, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Circle tap\n" + tapLatLong, Toast.LENGTH_SHORT).show();
                     return true;
                 }
                 return false;
             }
         };
 
-        FixedPixelCircle tappableCircle = new FixedPixelCircle(
-                latLong6,
-                20,
-                Utils.createPaint(
-                        AndroidGraphicFactory.INSTANCE.createColor(Color.GREEN),
-                        0, Style.FILL), null) {
+        FixedPixelCircle fixedPixelCircle = new FixedPixelCircle(latLong6, 20, Utils.createPaint(AndroidGraphicFactory.INSTANCE.createColor(Color.GREEN), 0, Style.FILL), null) {
             @Override
-            public boolean onTap(LatLong geoPoint, Point viewPosition,
-                                 Point tapPoint) {
-                if (this.contains(viewPosition, tapPoint)) {
-                    Toast.makeText(OverlayMapViewer.this,
-                            "The Circle was tapped " + geoPoint.toString(),
-                            Toast.LENGTH_SHORT).show();
+            public boolean onLongPress(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (this.contains(layerXY, tapXY, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Circle long press\n" + tapLatLong.toString(), Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (this.contains(layerXY, tapXY, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Circle tap\n" + tapLatLong.toString(), Toast.LENGTH_SHORT).show();
                     return true;
                 }
                 return false;
@@ -189,7 +225,151 @@ public class OverlayMapViewer extends DefaultTheme {
         layers.add(polygonWithShaderNonAligned);
         layers.add(circle);
         layers.add(marker1);
-        layers.add(tappableCircle);
+        layers.add(fixedPixelCircle);
+        layers.add(createPolygonWithHoles(anchorPolygonWithHoles));
+        layers.add(createZOrderObjects(anchorZOrderObjects));
+    }
+
+    private Layer createZOrderObjects(final LatLong anchor) {
+
+        final ZOrderGroupLayer zOrderLayer = new ZOrderGroupLayer();
+
+        //create polygons
+        final int count = 10;
+        for (int i = 0; i < count; i++) {
+            Paint paintFill = Utils.createPaint(
+                AndroidGraphicFactory.INSTANCE.createColor(255, 255 - (255 * i) / count, (255 * i) / count, 0), 2,
+                Style.FILL);
+            Paint paintStroke = Utils.createPaint(
+                    AndroidGraphicFactory.INSTANCE.createColor(Color.BLACK), 2,
+                    Style.STROKE);
+
+            final Polygon one = new Polygon(paintFill, paintStroke, AndroidGraphicFactory.INSTANCE) {
+                @Override
+                public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                    if (contains(tapXY, mapView)) {
+                        zOrderLayer.remove(this, true);
+                        return true;
+                    }
+                    return false;
+                }
+            };
+            one.addPoints(createPoints(addFraction(anchor, i * 5, i * 5), 0, 0, 10, 0, 10, 10, 0, 10));
+            zOrderLayer.put(one, i, false);
+            final Polygon two = new Polygon(paintFill, paintStroke, AndroidGraphicFactory.INSTANCE) {
+                @Override
+                public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                    if (contains(tapXY, mapView)) {
+                        zOrderLayer.remove(this, true);
+                        return true;
+                    }
+                    return false;
+                }
+            };
+            two.addPoints(createPoints(addFraction(anchor, i * 5, i * 5 + 50), 0, 0, 10, 0, 10, 10, 0, 10));
+            zOrderLayer.put(two, count - i, false);
+        }
+
+        return zOrderLayer;
+    }
+
+    private Polygon createPolygonWithHoles(final LatLong anchor) {
+        Paint paintFill = Utils.createPaint(
+                AndroidGraphicFactory.INSTANCE.createColor(Color.GREEN), 2,
+                Style.FILL);
+        Paint paintStroke = Utils.createPaint(
+                AndroidGraphicFactory.INSTANCE.createColor(Color.RED), 10,
+                Style.STROKE);
+        Polygon polygonWithHoles = new Polygon(paintFill, paintStroke, AndroidGraphicFactory.INSTANCE) {
+            @Override
+            public boolean onLongPress(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (contains(tapXY, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Polygon long press\n" + tapLatLong, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
+                if (contains(tapXY, mapView)) {
+                    Toast.makeText(OverlayMapViewer.this, "Polygon tap\n" + tapLatLong, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+        };
+        polygonWithHoles.addPoint(anchor);
+        polygonWithHoles.addPoint(addFraction(anchor, 10, 10));
+        polygonWithHoles.addPoint(addFraction(anchor, 50, 10));
+        polygonWithHoles.addPoint(addFraction(anchor, 50, 80));
+        polygonWithHoles.addPoint(addFraction(anchor, 10, 80));
+
+        polygonWithHoles.addHole(Arrays.asList(
+                addFraction(anchor, 20, 20),
+                addFraction(anchor, 25, 30),
+                addFraction(anchor, 15, 30)));
+        polygonWithHoles.addHole(Arrays.asList(
+                addFraction(anchor, 40, 40),
+                addFraction(anchor, 45, 40),
+                addFraction(anchor, 45, 60),
+                addFraction(anchor, 40, 60)));
+        polygonWithHoles.addHole(Arrays.asList(
+                addFraction(anchor, 20, 40),
+                addFraction(anchor, 35, 70),
+                addFraction(anchor, 25, 60),
+                addFraction(anchor, 15, 60)));
+
+        return polygonWithHoles;
+    }
+
+    private static List<LatLong> createPoints(final LatLong base, final int ... latLonAdds) {
+        final List<LatLong> points = new ArrayList<>(latLonAdds.length / 2);
+        for (int pos = 0; pos < latLonAdds.length - 1; pos += 2) {
+            points.add(addFraction(base, latLonAdds[pos], latLonAdds[pos+1]));
+        }
+        return points;
+    }
+
+    private static LatLong addFraction(final LatLong latLon, final int latAdd, final int lonAdd) {
+        return new LatLong(latLon.getLatitude() + ((double) latAdd / 5000d),
+                latLon.getLongitude() + ((double) lonAdd / 5000d));
+    }
+
+    @Override
+    protected void createControls() {
+        super.createControls();
+
+        // Three rotation buttons: rotate counterclockwise, reset, clockwise
+        Button rotateCCWButton = findViewById(R.id.rotateCounterClockWiseButton);
+        rotateCCWButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                rotationAngle -= 15;
+                mapView.rotate(new Rotation(rotationAngle, mapView.getWidth() * 0.5f, mapView.getHeight() * 0.5f));
+                redrawLayers();
+            }
+        });
+
+        Button rotateResetButton = findViewById(R.id.rotateResetButton);
+        rotateResetButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                rotationAngle = 0;
+                mapView.rotate(new Rotation(rotationAngle, mapView.getWidth() * 0.5f, mapView.getHeight() * 0.5f));
+                redrawLayers();
+            }
+        });
+
+        Button rotateCWButton = findViewById(R.id.rotateClockwiseButton);
+        rotateCWButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                rotationAngle += 15;
+                mapView.rotate(new Rotation(rotationAngle, mapView.getWidth() * 0.5f, mapView.getHeight() * 0.5f));
+                redrawLayers();
+            }
+        });
     }
 
     @Override
@@ -198,5 +378,28 @@ public class OverlayMapViewer extends DefaultTheme {
 
         // we just add a few more overlays
         addOverlayLayers(mapView.getLayerManager().getLayers());
+
+        // Enable rotation gesture
+        mapView.getTouchGestureHandler().setRotationEnabled(true);
+
+        rotationAngle = mapView.getMapRotation().degrees;
+    }
+
+    @Override
+    protected void createMapViews() {
+        super.createMapViews();
+        /*mapView.setMapViewCenterY(0.75f);
+        mapView.getModel().frameBufferModel.setOverdrawFactor(1.5);*/
+    }
+
+    @Override
+    protected int getLayoutId() {
+        return R.layout.rotation;
+    }
+
+    @Override
+    protected float getScreenRatio() {
+        // just to get the cache bigger right now.
+        return 2f;
     }
 }

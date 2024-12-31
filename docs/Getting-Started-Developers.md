@@ -4,8 +4,6 @@
 
 This article describes how to build the mapsforge project and libraries from scratch and how developers should start working.
 
-If you have any questions or problems, don't hesitate to ask our public [forum](https://groups.google.com/group/mapsforge-dev) for help.
-
 ## Checkout the code
 
 The mapsforge code is now **only** at https://github.com/mapsforge/mapsforge. The old repositories are not maintained anymore.
@@ -26,7 +24,6 @@ Extra Android components:
 - mapsforge-map-android: android specific map elements.
 - mapsforge-poi-android: android specific poi elements.
 - [androidsvg](http://bigbadaboom.github.io/androidsvg/): SVG library for displaying SVG files as icons.
-- [sqlite-android](https://sqlite.org/android/): SQLite Android Bindings.
 
 Extra Java components:
 

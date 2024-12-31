@@ -187,8 +187,8 @@ public final class MapFileWriter {
                 boolean labelPosition = this.configuration.isLabelPosition();
                 if (!labelPosition) {
                     List<OSMTag> tags = this.configuration.getTagMapping().getWayTags(this.way.getTags().keySet());
-                    for (OSMTag tag : tags) {
-                        labelPosition = tag.isLabelPosition();
+                    for (int i = 0, n = tags.size(); i < n; i++) {
+                        labelPosition = tags.get(i).isLabelPosition();
                         if (labelPosition)
                             break;
                     }
@@ -265,7 +265,7 @@ public final class MapFileWriter {
 
     static final int MIN_TILE_BUFFER_SIZE = 0xF00000; // 15MB
 
-    static final int POI_DATA_BUFFER_SIZE = 0x100000; // 1MB
+    static final int POI_DATA_BUFFER_SIZE = 0xA00000; // 10MB
 
     static final int TILE_BUFFER_SIZE = 0xA00000; // 10MB
 

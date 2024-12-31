@@ -1,8 +1,10 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014-2015 Ludwig M Brinckmann
- * Copyright 2016 devemux86
+ * Copyright 2016-2020 devemux86
  * Copyright 2017 usrusr
+ * Copyright 2020 Adrian Batzill
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -17,31 +19,26 @@
  */
 package org.mapsforge.map.layer.renderer;
 
-import org.mapsforge.core.graphics.Bitmap;
-import org.mapsforge.core.graphics.Canvas;
-import org.mapsforge.core.graphics.Color;
-import org.mapsforge.core.graphics.Filter;
-import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.graphics.GraphicUtils;
-import org.mapsforge.core.graphics.Matrix;
-import org.mapsforge.core.graphics.Path;
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.mapelements.MapElementContainer;
 import org.mapsforge.core.model.Point;
 import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.model.Tile;
+import org.mapsforge.core.util.Parameters;
 import org.mapsforge.map.rendertheme.RenderContext;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 public class CanvasRasterer {
+    private final RenderContext renderContext;
     private final Canvas canvas;
     private final Path path;
     private final Matrix symbolMatrix;
 
-    public CanvasRasterer(GraphicFactory graphicFactory) {
+    public CanvasRasterer(RenderContext renderContext, GraphicFactory graphicFactory) {
+        this.renderContext = renderContext;
         this.canvas = graphicFactory.createCanvas();
         this.path = graphicFactory.createPath();
         this.symbolMatrix = graphicFactory.createMatrix();
@@ -51,34 +48,12 @@ public class CanvasRasterer {
         this.canvas.destroy();
     }
 
-    void drawWays(RenderContext renderContext) {
-        int levelsPerLayer = renderContext.ways.get(0).size();
-
-        for (int layer = 0, layers = renderContext.ways.size(); layer < layers; ++layer) {
-            List<List<ShapePaintContainer>> shapePaintContainers = renderContext.ways.get(layer);
-
-            for (int level = 0; level < levelsPerLayer; ++level) {
-                List<ShapePaintContainer> wayList = shapePaintContainers.get(level);
-
-                for (int index = wayList.size() - 1; index >= 0; --index) {
-                    drawShapePaintContainer(wayList.get(index));
-                }
-            }
-        }
-    }
-
-    void drawMapElements(Set<MapElementContainer> elements, Tile tile) {
-        // we have a set of all map elements (needed so we do not draw elements twice),
-        // but we need to draw in priority order as we now allow overlaps. So we
-        // convert into list, then sort, then draw.
-        List<MapElementContainer> elementsAsList = new ArrayList<>(elements);
-        // draw elements in order of priority: lower priority first, so more important
-        // elements will be drawn on top (in case of display=true) items.
-        Collections.sort(elementsAsList);
-
-        for (MapElementContainer element : elementsAsList) {
-            // The color filtering takes place in TileLayer
-            element.draw(canvas, tile.getOrigin(), this.symbolMatrix, Filter.NONE);
+    /**
+     * Input is assumed to already be sorted by drawing priority.
+     */
+    void drawMapElements(List<MapElementContainer> elements, Tile tile) {
+        for (MapElementContainer element : elements) {
+            element.draw(canvas, tile.getOrigin(), this.symbolMatrix, Rotation.NULL_ROTATION);
         }
     }
 
@@ -89,7 +64,7 @@ public class CanvasRasterer {
     }
 
     /**
-     * Fills the area outside the specificed rectangle with color. Use this method when
+     * Fills the area outside the specified rectangle with color. Use this method when
      * overpainting with a transparent color as it sets the PorterDuff mode.
      * This method is used to blank out areas that fall outside the map area.
      *
@@ -126,7 +101,12 @@ public class CanvasRasterer {
     }
 
     private void drawHillshading(HillshadingContainer container) {
-        canvas.shadeBitmap(container.bitmap, container.hillsRect, container.tileRect, container.magnitude);
+        final Bitmap bitmap = container.bitmap;
+
+        // Synchronized to prevent concurrent modification by other threads e.g. while merging neighbors
+        synchronized (bitmap.getMutex()) {
+            canvas.shadeBitmap(bitmap, container.hillsRect, container.tileRect, container.magnitude, container.color);
+        }
     }
 
     private void drawPath(ShapePaintContainer shapePaintContainer, Point[][] coordinates, float dy) {
@@ -140,19 +120,56 @@ public class CanvasRasterer {
                 points = innerList;
             }
             if (points.length >= 2) {
-                Point point = points[0];
-                this.path.moveTo((float) point.x, (float) point.y);
-                for (int i = 1; i < points.length; ++i) {
-                    point = points[i];
-                    this.path.lineTo((int) point.x, (int) point.y);
+                // iterate over lines based on curveStyle
+                if (shapePaintContainer.curveStyle == Curve.CUBIC) {
+                    // prepare variables
+                    float[] p1 = new float[]{(float) points[0].x, (float) points[0].y};
+                    float[] p2 = new float[]{0.0f, 0.0f};
+                    float[] p3 = new float[]{0.0f, 0.0f};
+
+                    // add first point
+                    this.path.moveTo(p1[0], p1[1]);
+                    for (int i = 1; i < points.length; ++i) {
+                        // get ending coordinates
+                        p3[0] = (float) points[i].x;
+                        p3[1] = (float) points[i].y;
+                        p2[0] = (p1[0] + p3[0]) / 2.0f;
+                        p2[1] = (p1[1] + p3[1]) / 2.0f;
+
+                        // add spline over middle point and end on 'end' point
+                        this.path.quadTo(p1[0], p1[1], p2[0], p2[1]);
+
+                        // store end point as start point for next section
+                        p1[0] = p3[0];
+                        p1[1] = p3[1];
+                    }
+
+                    // add last segment
+                    this.path.quadTo(p2[0], p2[1], p3[0], p3[1]);
+                } else {
+                    // construct line
+                    this.path.moveTo((float) points[0].x, (float) points[0].y);
+                    for (int i = 1; i < points.length; ++i) {
+                        this.path.lineTo((int) points[i].x, (int) points[i].y);
+                    }
                 }
             }
         }
 
-        this.canvas.drawPath(this.path, shapePaintContainer.paint);
+        if (Parameters.NUMBER_OF_THREADS > 1) {
+            // Make sure setting the shader shift and actual drawing is synchronized,
+            // since the paint object is shared between multiple threads.
+            synchronized (shapePaintContainer.paint) {
+                final RenderContext renderContext = this.renderContext;
+                shapePaintContainer.paint.setBitmapShaderShift(renderContext.rendererJob.tile.getOrigin());
+                this.canvas.drawPath(this.path, shapePaintContainer.paint);
+            }
+        } else {
+            this.canvas.drawPath(this.path, shapePaintContainer.paint);
+        }
     }
 
-    private void drawShapePaintContainer(ShapePaintContainer shapePaintContainer) {
+    public void drawShapePaintContainer(ShapePaintContainer shapePaintContainer) {
         ShapeContainer shapeContainer = shapePaintContainer.shapeContainer;
         ShapeType shapeType = shapeContainer.getShapeType();
         switch (shapeType) {

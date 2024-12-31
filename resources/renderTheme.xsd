@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--suppress XmlDefaultAttributeValue -->
 <xs:schema xmlns:tns="http://mapsforge.org/renderTheme" xmlns:xs="http://www.w3.org/2001/XMLSchema"
     elementFormDefault="qualified" targetNamespace="http://mapsforge.org/renderTheme" xml:lang="en">
     <!-- attribute types -->
@@ -39,6 +40,13 @@
         </xs:annotation>
         <xs:restriction base="xs:string">
             <xs:pattern value="#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})" />
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="curve">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="cubic" />
+            <xs:enumeration value="no" />
         </xs:restriction>
     </xs:simpleType>
 
@@ -111,12 +119,41 @@
         </xs:restriction>
     </xs:simpleType>
 
+    <xs:simpleType name="symbolOrientation">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="auto" />
+            <xs:enumeration value="auto_down" />
+            <xs:enumeration value="right" />
+            <xs:enumeration value="left" />
+            <xs:enumeration value="up" />
+            <xs:enumeration value="down" />
+        </xs:restriction>
+    </xs:simpleType>
+
     <xs:simpleType name="textKey">
         <xs:restriction base="xs:string">
             <xs:enumeration value="ele" />
             <xs:enumeration value="addr:housenumber" />
             <xs:enumeration value="name" />
             <xs:enumeration value="ref" />
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="textOrientation">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="auto" />
+            <xs:enumeration value="auto_down" />
+            <xs:enumeration value="right" />
+            <xs:enumeration value="left" />
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="textTransform">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="none" />
+            <xs:enumeration value="uppercase" />
+            <xs:enumeration value="lowercase" />
+            <xs:enumeration value="capitalize" />
         </xs:restriction>
     </xs:simpleType>
 
@@ -130,6 +167,7 @@
         <xs:attribute name="scale" default="stroke" type="tns:scale" use="optional" />
         <xs:attribute name="stroke" default="#00000000" type="tns:color" use="optional" />
         <xs:attribute name="stroke-width" default="0" type="tns:nonNegativeFloat" use="optional" />
+        <xs:attribute name="text-transform" default="none" type="tns:textTransform" use="optional" />
     </xs:complexType>
 
     <xs:complexType name="caption">
@@ -146,6 +184,8 @@
         <xs:attribute name="stroke-width" default="0" type="tns:nonNegativeFloat" use="optional" />
         <xs:attribute name="position" default="auto" type="tns:position" use="optional" />
         <xs:attribute name="symbol-id" type="xs:string" use="optional" />
+        <xs:attribute name="text-transform" default="none" type="tns:textTransform" use="optional" />
+        <xs:attribute name="text-wrap-width" default="0" type="xs:integer" use="optional" />
     </xs:complexType>
 
     <!-- style menu cat element -->
@@ -188,6 +228,7 @@
         <xs:attribute name="stroke-dasharray" type="tns:strokeDasharray" use="optional" />
         <xs:attribute name="stroke-linecap" default="round" type="tns:cap" use="optional" />
         <xs:attribute name="stroke-linejoin" default="round" type="tns:linejoin" use="optional" />
+        <xs:attribute name="curve" default="no" type="tns:curve" use="optional" />
     </xs:complexType>
 
     <xs:complexType name="lineSymbol">
@@ -199,6 +240,7 @@
         <xs:attribute name="symbol-width" type="xs:positiveInteger" use="optional" />
         <xs:attribute name="symbol-height" type="xs:positiveInteger" use="optional" />
         <xs:attribute name="symbol-percent" type="xs:positiveInteger" use="optional" />
+        <xs:attribute name="symbol-orientation" default="right" type="tns:symbolOrientation" use="optional" />
         <xs:attribute name="position" default="below_right" type="tns:position" use="optional" />
         <xs:attribute name="priority" default="0" type="xs:integer" use="optional" />
         <xs:attribute name="repeat" default="false" type="xs:boolean" use="optional" />
@@ -235,6 +277,8 @@
         <xs:attribute name="repeat-gap" default="100" type="xs:float" use="optional" />
         <xs:attribute name="repeat-start" default="10" type="xs:float" use="optional" />
         <xs:attribute name="rotate" default="true" type="xs:boolean" use="optional" />
+        <xs:attribute name="text-orientation" default="auto" type="tns:textOrientation" use="optional" />
+        <xs:attribute name="text-transform" default="none" type="tns:textTransform" use="optional" />
     </xs:complexType>
 
     <xs:complexType name="symbol">
@@ -274,14 +318,16 @@
     <!-- hillshading element -->
     <xs:complexType name="hillShading">
         <xs:attribute name="cat" type="xs:string" use="optional" />
-        <xs:attribute name="zoom-min" default="5" type="xs:unsignedByte" use="optional" />
+        <xs:attribute name="zoom-min" default="9" type="xs:unsignedByte" use="optional" />
         <xs:attribute name="zoom-max" default="17" type="xs:unsignedByte" use="optional" />
-        <xs:attribute name="magnitude" default="64" type="xs:unsignedByte" use="optional" />
-        <xs:attribute name="always" default="false" type="xs:boolean" use="optional">
+        <xs:attribute name="magnitude" default="128" type="xs:unsignedByte" use="optional" />
+        <xs:attribute name="color" default="#ff000000" type="tns:color" use="optional">
             <xs:annotation>
-                <xs:documentation>Apply neutral shading when tiles are missing or shading is
-                    disabled to keep colors consistent (for themes that compensate color intensity
-                    for hillshading desaturation)
+                <xs:documentation>Hill shading color. The alpha component is combined with the
+                    "magnitude" attribute - you can use both to control the opacity of the hill
+                    shading. They are multiplied, so for example a magnitude of 128 and a color of
+                    #ff000000 would result in an opacity of 50%, while a magnitude of 128 and a
+                    color of #80000000 would result in an opacity of 25% (0.5 * 0.5 = 0.25).
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
@@ -293,7 +339,6 @@
     <xs:complexType name="rendertheme">
         <xs:sequence maxOccurs="1" minOccurs="0">
             <xs:element name="stylemenu" maxOccurs="1" minOccurs="0" type="tns:stylemenu" />
-            <xs:element name="rule" maxOccurs="unbounded" minOccurs="0" type="tns:rule" />
             <xs:choice maxOccurs="unbounded" minOccurs="0">
                 <xs:element name="hillshading" maxOccurs="1" minOccurs="0" type="tns:hillShading" />
                 <xs:element name="rule" maxOccurs="unbounded" minOccurs="0" type="tns:rule" />

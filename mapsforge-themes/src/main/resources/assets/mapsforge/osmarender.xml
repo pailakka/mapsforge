@@ -149,14 +149,14 @@
                 <area fill="#b5d6f1" />
             </rule>
 
-            <rule e="way" k="*" v="*" zoom-min="16">
+            <rule e="way" k="*" v="*" zoom-min="14">
                 <caption fill="#4040ff" font-size="10" font-style="bold" k="name" stroke="#ffffff"
                     stroke-width="2.0" />
             </rule>
         </rule>
 
 
-        <rule e="way" k="natural|landuse" v="forest|wood|scrub">
+        <rule e="way" k="natural|landuse" v="forest|wood|scrub" zoom-min="9">
             <rule e="way" k="wood" v="*">
                 <rule e="way" k="wood" v="coniferous">
                     <area src="jar:patterns/wood-coniferous.png" />
@@ -325,6 +325,15 @@
                 <line stroke="#000000" stroke-linecap="butt" stroke-width="2.0" />
                 <line stroke="#f8f8f8" stroke-linecap="butt" stroke-width="1.5" />
             </rule>
+
+            <rule e="way" k="waterway" v="river" zoom-min="12">
+                <pathText fill="#4040ff" font-size="10" font-style="bold" k="name" stroke="#ffffff"
+                    stroke-width="2.0" />
+            </rule>
+            <rule e="way" k="waterway" v="stream|canal" zoom-min="15">
+                <pathText fill="#4040ff" font-size="10" font-style="bold" k="name" stroke="#ffffff"
+                    stroke-width="2.0" />
+            </rule>
         </rule>
 
 
@@ -441,7 +450,7 @@
 
 
     <!-- hillshading -->
-    <hillshading />
+    <hillshading zoom-min="9" zoom-max="17" />
 
 
     <!-- turning circles -->
@@ -1076,7 +1085,7 @@
             <rule e="node" k="amenity" v="fountain" zoom-min="17">
                 <symbol src="jar:symbols/amenity/fountain2.svg" />
             </rule>
-            <rule e="node" k="amenity" v="fuel" zoom-min="17">
+            <rule e="node" k="amenity" v="fuel" zoom-min="15">
                 <symbol src="jar:symbols/transport/fuel.svg" />
             </rule>
             <rule e="node" k="amenity" v="hospital" zoom-min="15">
@@ -1231,6 +1240,10 @@
         <rule e="node" k="place" v="*">
             <rule e="node" k="place" v="locality" zoom-min="13">
                 <caption fill="#606060" font-size="12" font-style="bold" k="name" stroke="#ffffff"
+                    stroke-width="2.0" />
+            </rule>
+            <rule e="node" k="place" v="neighbourhood" zoom-min="13">
+                <caption fill="#000000" font-size="13" font-style="bold" k="name" stroke="#ffffff"
                     stroke-width="2.0" />
             </rule>
             <rule e="node" k="place" v="hamlet" zoom-min="13">

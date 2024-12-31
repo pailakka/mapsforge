@@ -6,6 +6,7 @@
  * Copyright 2016 bvgastel
  * Copyright 2017 linuskr
  * Copyright 2017 Gustl22
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -240,7 +241,7 @@ public class MapFile extends MapDataStore {
         } catch (Exception e) {
             // make sure that the channel is closed
             closeFileChannel();
-            throw new MapFileException(e.getMessage());
+            throw new MapFileException(e.toString());
         }
     }
 
@@ -290,7 +291,7 @@ public class MapFile extends MapDataStore {
         } catch (Exception e) {
             // make sure that the channel is closed
             closeFileChannel();
-            throw new MapFileException(e.getMessage());
+            throw new MapFileException(e.toString());
         }
     }
 
@@ -340,7 +341,7 @@ public class MapFile extends MapDataStore {
         } catch (Exception e) {
             // make sure that the channel is closed
             closeFileChannel();
-            throw new MapFileException(e.getMessage());
+            throw new MapFileException(e.toString());
         }
     }
 
@@ -389,7 +390,7 @@ public class MapFile extends MapDataStore {
                 this.inputChannel.close();
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         }
     }
 
@@ -664,7 +665,7 @@ public class MapFile extends MapDataStore {
                         mapFileReadResult.add(poiWayBundle);
                     }
                 } catch (ArrayIndexOutOfBoundsException e) {
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    LOGGER.log(Level.SEVERE, e.toString(), e);
                 }
             }
         }
@@ -952,7 +953,7 @@ public class MapFile extends MapDataStore {
 
         try {
             QueryParameters queryParameters = new QueryParameters();
-            queryParameters.queryZoomLevel = this.mapFileHeader.getQueryZoomLevel(upperLeft.zoomLevel);
+            queryParameters.queryZoomLevel = this.mapFileHeader.getQueryZoomLevel(upperLeft.zoomLevel, getMapCallback());
 
             // get and check the sub-file for the query zoom level
             SubFileParameter subFileParameter = this.mapFileHeader.getSubFileParameter(queryParameters.queryZoomLevel);
@@ -969,7 +970,7 @@ public class MapFile extends MapDataStore {
             // overlap onto this tile.
             return processBlocks(queryParameters, subFileParameter, Tile.getBoundingBox(upperLeft, lowerRight), selector);
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
             return null;
         }
     }
@@ -1070,6 +1071,30 @@ public class MapFile extends MapDataStore {
     public boolean supportsTile(Tile tile) {
         return tile.getBoundingBox().intersects(getMapFileInfo().boundingBox)
                 && (tile.zoomLevel >= this.zoomLevelMin && tile.zoomLevel <= this.zoomLevelMax);
+    }
+
+    @Override
+    public boolean supportsFullTile(Tile tile) {
+        return supportsFullArea(tile.getBoundingBox(), tile.zoomLevel);
+    }
+
+    @Override
+    public boolean supportsArea(BoundingBox boundingBox, byte zoomLevel) {
+        return boundingBox.intersects(getMapFileInfo().boundingBox)
+                && (zoomLevel >= this.zoomLevelMin && zoomLevel <= this.zoomLevelMax);
+    }
+
+    @Override
+    public boolean supportsFullArea(BoundingBox boundingBox, byte zoomLevel) {
+        final BoundingBox bbox1 = getMapFileInfo().boundingBox;
+        final BoundingBox bbox2 = boundingBox;
+        return bbox1.intersects(bbox2)
+                && zoomLevel >= this.zoomLevelMin
+                && zoomLevel <= this.zoomLevelMax
+                && bbox1.contains(bbox2.maxLatitude, bbox2.maxLongitude)
+                && bbox1.contains(bbox2.minLatitude, bbox2.minLongitude)
+                && bbox1.contains(bbox2.maxLatitude, bbox2.minLongitude)
+                && bbox1.contains(bbox2.minLatitude, bbox2.maxLongitude);
     }
 
     /**

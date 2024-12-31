@@ -1,5 +1,6 @@
 /*
- * Copyright 2017 usrusr
+ * Copyright 2017-2022 usrusr
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -16,31 +17,52 @@ package org.mapsforge.map.layer.hills;
 
 import org.mapsforge.core.graphics.GraphicFactory;
 import org.mapsforge.core.graphics.HillshadingBitmap;
+import org.mapsforge.core.util.Constants;
 
-import java.io.File;
 import java.util.concurrent.ExecutionException;
 
 /**
  * Mutable configuration frontend for an underlying {@link HgtCache} (that will be replaced in one piece when parameters change)
  */
 public class MemoryCachingHgtReaderTileSource implements ShadeTileSource {
+    /**
+     * No need for this to ever be greater than 1, as bitmap filtering uses at most a bicubic interpolation.
+     */
+    public static final int PaddingSizeDefault = 1;
+
+    // To prevent cache starvation
+    protected final int CacheMinCount = 1;
+
+    // Each HGT file contains 1° x 1° DEM data, so there can be at most 180 x 360 HGT files.
+    // The actual number of files is smaller because there is currently no bathymetric data.
+    protected final int CacheMaxCount = 360 * 180;
+
+    // One 1" HGT file converted to a same-sized bitmap is about 13 MB, for high-quality this is 52 MB.
+    // For ultra-low-quality while rendering wide zoom in adaptive mode, bitmap size per 1" HGT file can be as low as a few hundred bytes.
+    protected final long CacheMaxBytes = Constants.MAX_MEMORY_MB * 1000 * 1000 / 10;
+
     private final GraphicFactory graphicsFactory;
     private HgtCache currentCache;
-    private int mainCacheSize = 4;
-    private int neighborCacheSize = 4;
-    private boolean enableInterpolationOverlap = true;
-    private File demFolder;
+    private DemFolder demFolder;
     private ShadingAlgorithm algorithm;
-    private boolean configurationChangePending = true;
 
-    public MemoryCachingHgtReaderTileSource(File demFolder, ShadingAlgorithm algorithm, GraphicFactory graphicsFactory) {
-        this(graphicsFactory);
+    /**
+     * 2024-10: This no longer affects performance as much as before, so it simply should be set to {@code true}.
+     * Performance is not a big issue any more because no excess shading tiles are loaded beyond the required tiles used for display.
+     */
+    protected final boolean isEnableInterpolationOverlap;
+    protected final int padding;
+
+    public MemoryCachingHgtReaderTileSource(DemFolder demFolder, ShadingAlgorithm algorithm, GraphicFactory graphicsFactory, boolean isEnableInterpolationOverlap) {
+        this.graphicsFactory = graphicsFactory;
         this.demFolder = demFolder;
         this.algorithm = algorithm;
+        this.isEnableInterpolationOverlap = isEnableInterpolationOverlap;
+        this.padding = this.isEnableInterpolationOverlap ? PaddingSizeDefault : 0;
     }
 
-    public MemoryCachingHgtReaderTileSource(GraphicFactory graphicsFactory) {
-        this.graphicsFactory = graphicsFactory;
+    public MemoryCachingHgtReaderTileSource(DemFolder demFolder, ShadingAlgorithm algorithm, GraphicFactory graphicsFactory) {
+        this(demFolder, algorithm, graphicsFactory, true);
     }
 
     @Override
@@ -50,24 +72,27 @@ public class MemoryCachingHgtReaderTileSource implements ShadeTileSource {
         if (allowParallel && latest != null && latest != before) latest.indexOnThread();
     }
 
-    private HgtCache latestCache() {
-        HgtCache ret = this.currentCache;
-        if (ret != null && !configurationChangePending) return ret;
+    protected HgtCache latestCache() {
         if (demFolder == null || algorithm == null) {
-            this.currentCache = null;
+            interruptAndDestroy();
             return null;
         }
-        if (ret == null
-                || enableInterpolationOverlap != this.currentCache.interpolatorOverlap
-                || mainCacheSize != this.currentCache.mainCacheSize
-                || neighborCacheSize != this.currentCache.neighborCacheSize
-                || !demFolder.equals(this.currentCache.demFolder)
-                || !algorithm.equals(this.currentCache.algorithm)
-                ) {
-            ret = new HgtCache(demFolder, enableInterpolationOverlap, graphicsFactory, algorithm, mainCacheSize, neighborCacheSize);
-            this.currentCache = ret;
+
+        if (isNewCacheNeeded()) {
+            synchronized (graphicsFactory) {
+                if (isNewCacheNeeded()) {
+                    this.currentCache = new HgtCache(demFolder, graphicsFactory, padding, algorithm, CacheMinCount, CacheMaxCount, CacheMaxBytes);
+                }
+            }
         }
-        return ret;
+
+        return this.currentCache;
+    }
+
+    protected boolean isNewCacheNeeded() {
+        return (this.currentCache == null
+                || !demFolder.equals(this.currentCache.demFolder)
+                || !algorithm.equals(this.currentCache.shadingAlgorithm));
     }
 
     @Override
@@ -76,64 +101,66 @@ public class MemoryCachingHgtReaderTileSource implements ShadeTileSource {
     }
 
     @Override
-    public HillshadingBitmap getHillshadingBitmap(int latitudeOfSouthWestCorner, int longituedOfSouthWestCorner, double pxPerLat, double pxPerLng) throws ExecutionException, InterruptedException {
+    public HillshadingBitmap getHillshadingBitmap(int latitudeOfSouthWestCorner, int longitudeOfSouthWestCorner, int zoomLevel, double pxPerLat, double pxPerLon, int color) throws ExecutionException, InterruptedException {
 
         if (latestCache() == null) {
 
             return null;
         }
-        return currentCache.getHillshadingBitmap(latitudeOfSouthWestCorner, longituedOfSouthWestCorner, pxPerLat, pxPerLng);
+
+        return this.currentCache.getHillshadingBitmap(latitudeOfSouthWestCorner, longitudeOfSouthWestCorner, zoomLevel, pxPerLat, pxPerLon, color);
     }
 
     @Override
-    public void setShadingAlgorithm(ShadingAlgorithm algorithm) {
+    public ShadingAlgorithm getAlgorithm() {
+        return algorithm;
+    }
+
+    @Override
+    public void setAlgorithm(ShadingAlgorithm algorithm) {
         this.algorithm = algorithm;
     }
 
     @Override
-    public void setDemFolder(File demFolder) {
+    public boolean isZoomLevelSupported(int zoomLevel, int lat, int lon) {
+        boolean retVal = true;
+
+        latestCache();
+
+        if (this.currentCache != null) {
+            retVal = this.currentCache.isZoomLevelSupported(zoomLevel, lat, lon);
+        }
+
+        return retVal;
+    }
+
+    @Override
+    public void interruptAndDestroy() {
+        final HgtCache cache = currentCache;
+        this.currentCache = null;
+
+        if (cache != null) {
+            cache.interruptAndDestroy();
+        }
+    }
+
+    public void setDemFolder(DemFolder demFolder) {
         this.demFolder = demFolder;
     }
 
-    /**
-     * @param mainCacheSize number of recently used shading tiles (whole numer latitude/longitude grid) that are kept in memory (default: 4)
-     */
-    public void setMainCacheSize(int mainCacheSize) {
-        this.mainCacheSize = mainCacheSize;
+    public int getCacheMaxCount() {
+        return CacheMaxCount;
     }
 
-    /**
-     * @param neighborCacheSize number of additional shading tiles to keep in memory for interpolationOverlap (ignored if enableInterpolationOverlap is false)
-     */
-    public void setNeighborCacheSize(int neighborCacheSize) {
-        this.neighborCacheSize = neighborCacheSize;
+    public int getCacheMinCount() {
+        return CacheMinCount;
     }
 
-    /**
-     * @param enableInterpolationOverlap false is faster, but shows minor artifacts along the latitude/longitude
-     *                                   (if true, preparing a shading tile for high resolution use requires all 4 neighboring tiles to be loaded if they are not in memory)
-     */
-    public void setEnableInterpolationOverlap(boolean enableInterpolationOverlap) {
-        this.enableInterpolationOverlap = enableInterpolationOverlap;
-    }
-
-    public int getMainCacheSize() {
-        return mainCacheSize;
-    }
-
-    public int getNeighborCacheSize() {
-        return neighborCacheSize;
+    public long getCacheMaxBytes() {
+        return CacheMaxBytes;
     }
 
     public boolean isEnableInterpolationOverlap() {
-        return enableInterpolationOverlap;
-    }
-
-    public File getDemFolder() {
-        return demFolder;
-    }
-
-    public ShadingAlgorithm getAlgorithm() {
-        return algorithm;
+        return isEnableInterpolationOverlap;
     }
 }

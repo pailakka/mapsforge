@@ -4,8 +4,6 @@ The Mapsforge Map-Writer is a plug-in for the OpenStreetMap Osmosis Tool to conv
 
 This documentation is intended for those who want to create map files for use with mapsforge.
 
-If you have any questions or problems, don't hesitate to ask our public [forum](https://groups.google.com/group/mapsforge-dev) for help.
-
 ## Introduction
 
 This document describes the mapsforge map-writer plugin. It allows to convert OpenStreetMap data into the .map format which is needed to display maps with mapsforge-based applications. The tool is implemented as a plugin to the [Osmosis](http://wiki.openstreetmap.org/wiki/Osmosis) software. To use the tool, you are required to have a working installation of Osmosis and the writer plugin copied to the plugins directory of Osmosis. You should also be familiar with the Osmosis tool.
@@ -36,7 +34,7 @@ The mapsforge writer has not changed significantly from version 0.3 and files ge
 
 |**Option**|**Description**|**Valid Values**|**Default Value**|
 |----------|---------------|----------------|-----------------|
-|`tag-conf-file`|path to an XML file that customizes the definition which OSM-tags are recognized|path to an XML file, please read section 'Defining a Custom Tag Mapping via XML' carefully before using thsi parameter|(blank) internal default tag mapping is used|
+|`tag-conf-file`|path to an XML file that customizes the definition which OSM-tags are recognized|path to an XML file, please read section 'Defining a Custom Tag Mapping via XML' carefully before using this parameter|(blank) internal default tag mapping is used|
 |`polygon-clipping`|use polygon clipping to reduce map file size (minimal performance overhead)|true/false|true|
 |`way-clipping`|use way clipping to reduce map file size (minimal performance overhead)|true/false|true|
 |`label-position`|compute label/symbol position for polygons that cover multiple tiles|true/false|false|
@@ -59,14 +57,14 @@ The mapsforge writer has not changed significantly from version 0.3 and files ge
 
 - The plugin requires a bounding box definition, which is either included in the data or is given via the command line parameter `bbox`. Take note that the XML export functionality of the OSM website currently produces invalid bounding box definitions, so that the `bbox` parameter must be used in this case.
 - If you installed the plugin into the user home, please make sure that you run osmosis with exactly this user and not with another user (e.g. the root user).
-- There is a potential issue with tile grid artifacts inside areas at zoom levels 12-13, specially if they have stroke or semi-transparent fill. To solve this you can try a different zoom interval:
+- There is a potential issue with tile grid artifacts inside areas at zoom levels 12-13, specially if they have stroke or semi-transparent fill. To solve this you can try a non-transparent fill without stroke or a pattern or adding `force-polygon-line="true"` in the tag-mapping or a different zoom interval:
 ```bash
 zoom-interval-conf=5,0,7,10,8,11,12,12,13,14,14,21
 ```
 
 ## Plugin Installation
 
-- Download the release or snapshot writer plugin (**jar-with-dependencies**) from [Maven Central](https://search.maven.org/search?q=g:org.mapsforge) or [Sonatype OSS Repository Hosting](https://oss.sonatype.org/content/repositories/snapshots/org/mapsforge/) and read the Osmosis [documentation](http://wiki.openstreetmap.org/wiki/Osmosis/Detailed_Usage#Plugin_Tasks) for how to install a plugin.
+- Download from [Releases](https://github.com/mapsforge/mapsforge/releases) or build the snapshot writer plugin (**jar-with-dependencies**) and read the Osmosis [documentation](http://wiki.openstreetmap.org/wiki/Osmosis/Detailed_Usage#Plugin_Tasks) for how to install a plugin.
 - You may want to increase the Java heap space that may be allocated for osmosis. You can do so by editing the script $OSMOSIS_HOME/bin/osmosis(.bat). Insert a line with 'JAVACMD_OPTIONS=-Xmx800m'. This sets the maximum available Java heap space to 800M. Of course you can set this parameter to a value which ever fits best for your purpose.
 - See http://wiki.openstreetmap.org/wiki/Osmosis/Installation for further information about Osmosis usage.
 

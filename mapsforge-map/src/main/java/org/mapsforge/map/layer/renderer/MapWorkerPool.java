@@ -3,6 +3,7 @@
  * Copyright 2014 Ludwig M Brinckmann
  * Copyright 2015-2017 devemux86
  * Copyright 2016 ksaihtam
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -36,10 +37,8 @@ public class MapWorkerPool implements Runnable {
     private static final Logger LOGGER = Logger.getLogger(MapWorkerPool.class.getName());
 
     public static boolean DEBUG_TIMING = false;
-
+    private final AtomicLong debugStart = new AtomicLong(0), debugPrevStart = new AtomicLong(0);
     private final AtomicInteger concurrentJobs = new AtomicInteger();
-    private final AtomicLong totalExecutions = new AtomicLong();
-    private final AtomicLong totalTime = new AtomicLong();
 
     private final DatabaseRenderer databaseRenderer;
     private boolean inShutdown, isRunning;
@@ -100,6 +99,7 @@ public class MapWorkerPool implements Runnable {
         // Shutdown executors
         this.self.shutdown();
         this.workers.shutdown();
+        this.databaseRenderer.interruptAndDestroy();
 
         try {
             if (!this.self.awaitTermination(100, TimeUnit.MILLISECONDS)) {
@@ -138,33 +138,44 @@ public class MapWorkerPool implements Runnable {
         public void run() {
             TileBitmap bitmap = null;
             try {
-                long start = 0;
                 if (inShutdown) {
                     return;
                 }
                 if (DEBUG_TIMING) {
-                    start = System.currentTimeMillis();
-                    LOGGER.info("ConcurrentJobs " + concurrentJobs.incrementAndGet());
-                }
-                bitmap = MapWorkerPool.this.databaseRenderer.executeJob(rendererJob);
-                if (inShutdown) {
-                    return;
-                }
+                    final int jobs = concurrentJobs.incrementAndGet();
 
-                if (!rendererJob.labelsOnly && bitmap != null) {
-                    MapWorkerPool.this.tileCache.put(rendererJob, bitmap);
-                    MapWorkerPool.this.databaseRenderer.removeTileInProgress(rendererJob.tile);
-                }
-                MapWorkerPool.this.layer.requestRedraw();
+                    final long start, end;
 
-                if (DEBUG_TIMING) {
-                    long end = System.currentTimeMillis();
-                    long te = totalExecutions.incrementAndGet();
-                    long tt = totalTime.addAndGet(end - start);
-                    if (te % 10 == 0) {
-                        LOGGER.info("TIMING " + Long.toString(te) + " " + Double.toString(tt / te));
+                    start = System.nanoTime();
+
+                    bitmap = MapWorkerPool.this.databaseRenderer.executeJob(rendererJob);
+
+                    if (inShutdown) {
+                        concurrentJobs.decrementAndGet();
+                        return;
                     }
+
+                    MapWorkerPool.this.layer.requestRedraw();
+
+                    end = System.nanoTime();
+
+                    synchronized (debugStart) {
+                        if (start - debugPrevStart.getAndSet(start) > 1e9) {
+                            debugStart.set(start);
+                        }
+                    }
+
+                    System.out.println("RENDER TIME: " + Math.round((end - debugStart.get()) / 1e6) + " ms  JOBS: " + jobs);
+
                     concurrentJobs.decrementAndGet();
+                } else {
+                    bitmap = MapWorkerPool.this.databaseRenderer.executeJob(rendererJob);
+
+                    if (inShutdown) {
+                        return;
+                    }
+
+                    MapWorkerPool.this.layer.requestRedraw();
                 }
             } finally {
                 this.rendererJob.renderThemeFuture.decrementRefCount();

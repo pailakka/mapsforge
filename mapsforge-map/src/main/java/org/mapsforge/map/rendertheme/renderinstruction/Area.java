@@ -1,7 +1,8 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014-2015 Ludwig M Brinckmann
- * Copyright 2014-2019 devemux86
+ * Copyright 2014-2020 devemux86
+ * Copyright 2020 Adrian Batzill
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -16,17 +17,14 @@
  */
 package org.mapsforge.map.rendertheme.renderinstruction;
 
-import org.mapsforge.core.graphics.Bitmap;
-import org.mapsforge.core.graphics.Cap;
-import org.mapsforge.core.graphics.Color;
-import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.Style;
+import org.mapsforge.core.graphics.*;
+import org.mapsforge.core.util.Parameters;
 import org.mapsforge.map.datastore.PointOfInterest;
 import org.mapsforge.map.layer.renderer.PolylineContainer;
 import org.mapsforge.map.model.DisplayModel;
 import org.mapsforge.map.rendertheme.RenderCallback;
 import org.mapsforge.map.rendertheme.RenderContext;
+import org.mapsforge.map.rendertheme.XmlThemeResourceProvider;
 import org.mapsforge.map.rendertheme.XmlUtils;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -43,6 +41,7 @@ public class Area extends RenderInstruction {
     private final Paint fill;
     private final int level;
     private final String relativePathPrefix;
+    private final XmlThemeResourceProvider resourceProvider;
     private Scale scale = Scale.STROKE;
     private Bitmap shaderBitmap;
     private String src;
@@ -50,12 +49,15 @@ public class Area extends RenderInstruction {
     private final Map<Byte, Paint> strokes;
     private float strokeWidth;
 
+    private final Object mySync = new Object();
+
     public Area(GraphicFactory graphicFactory, DisplayModel displayModel, String elementName,
-                XmlPullParser pullParser, int level, String relativePathPrefix) throws IOException, XmlPullParserException {
+                XmlPullParser pullParser, int level, String relativePathPrefix, XmlThemeResourceProvider resourceProvider) throws IOException, XmlPullParserException {
         super(graphicFactory, displayModel);
 
         this.level = level;
         this.relativePathPrefix = relativePathPrefix;
+        this.resourceProvider = resourceProvider;
 
         this.fill = graphicFactory.createPaint();
         this.fill.setColor(Color.TRANSPARENT);
@@ -104,7 +106,7 @@ public class Area extends RenderInstruction {
             } else if (SYMBOL_WIDTH.equals(name)) {
                 this.width = XmlUtils.parseNonNegativeInteger(name, value) * displayModel.getScaleFactor();
             } else {
-                throw XmlUtils.createXmlPullParserException(elementName, name, value, i);
+                XmlUtils.logUnknownAttribute(elementName, name, value, i);
             }
         }
     }
@@ -128,13 +130,13 @@ public class Area extends RenderInstruction {
 
     @Override
     public void renderWay(RenderCallback renderCallback, final RenderContext renderContext, PolylineContainer way) {
-        synchronized (this) {
+        synchronized (mySync) {
             // this needs to be synchronized as we potentially set a shift in the shader and
             // the shift is particular to the tile when rendered in multi-thread mode
             Paint fillPaint = getFillPaint();
             if (shaderBitmap == null && !bitmapInvalid) {
                 try {
-                    shaderBitmap = createBitmap(relativePathPrefix, src);
+                    shaderBitmap = createBitmap(relativePathPrefix, src, resourceProvider);
                     if (shaderBitmap != null) {
                         fillPaint.setBitmapShader(shaderBitmap);
                         shaderBitmap.decrementRefCount();
@@ -144,7 +146,9 @@ public class Area extends RenderInstruction {
                 }
             }
 
-            fillPaint.setBitmapShaderShift(way.getUpperLeft().getOrigin());
+            if (Parameters.NUMBER_OF_THREADS == 1) {
+                fillPaint.setBitmapShaderShift(way.getUpperLeft().getOrigin());
+            }
 
             renderCallback.renderArea(renderContext, fillPaint, getStrokePaint(renderContext.rendererJob.tile.zoomLevel), this.level, way);
         }
@@ -152,13 +156,15 @@ public class Area extends RenderInstruction {
 
     @Override
     public void scaleStrokeWidth(float scaleFactor, byte zoomLevel) {
-        if (this.stroke != null) {
-            if (this.scale == Scale.NONE) {
-                scaleFactor = 1;
+        synchronized (mySync) {
+            if (this.stroke != null) {
+                if (this.scale == Scale.NONE) {
+                    scaleFactor = 1;
+                }
+                Paint paint = graphicFactory.createPaint(this.stroke);
+                paint.setStrokeWidth(this.strokeWidth * scaleFactor);
+                this.strokes.put(zoomLevel, paint);
             }
-            Paint paint = graphicFactory.createPaint(this.stroke);
-            paint.setStrokeWidth(this.strokeWidth * scaleFactor);
-            this.strokes.put(zoomLevel, paint);
         }
     }
 

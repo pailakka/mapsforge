@@ -26,7 +26,7 @@ import org.mapsforge.map.android.view.MapView;
 import org.mapsforge.map.datastore.MapDataStore;
 import org.mapsforge.map.layer.cache.TileCache;
 import org.mapsforge.map.layer.hills.HillsRenderConfig;
-import org.mapsforge.map.model.IMapViewPosition;
+import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.model.common.PreferencesFacade;
 import org.mapsforge.map.reader.MapFile;
 import org.mapsforge.map.rendertheme.XmlRenderTheme;
@@ -172,7 +172,7 @@ public abstract class MapViewerTemplate extends Activity {
             Byte startZoomLevel = mapFile.startZoomLevel();
             if (startZoomLevel == null) {
                 // it is actually possible to have no start zoom level in the file
-                startZoomLevel = new Byte((byte) 12);
+                startZoomLevel = (byte) 12;
             }
             return new MapPosition(mapFile.startPosition(), startZoomLevel);
         } else {
@@ -182,12 +182,12 @@ public abstract class MapViewerTemplate extends Activity {
 
     /**
      * Provides the directory of the map file, by default the Android external storage
-     * directory: /sdcard/Android/data/org.mapsforge.samples.android/files/
+     * directory: /Android/media/org.mapsforge.samples.android/
      *
      * @return
      */
     protected File getMapFileDirectory() {
-        return getExternalFilesDir(null);
+        return getExternalMediaDirs()[0];
     }
 
     /**
@@ -246,7 +246,7 @@ public abstract class MapViewerTemplate extends Activity {
      * @param mvp the map view position to be set
      * @return the mapviewposition set
      */
-    protected IMapViewPosition initializePosition(IMapViewPosition mvp) {
+    protected MapViewPosition initializePosition(MapViewPosition mvp) {
         LatLong center = mvp.getCenter();
 
         if (center.equals(new LatLong(0, 0))) {

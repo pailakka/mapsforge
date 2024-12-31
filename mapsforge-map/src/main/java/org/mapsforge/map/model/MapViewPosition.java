@@ -18,17 +18,15 @@
  */
 package org.mapsforge.map.model;
 
-import org.mapsforge.core.model.BoundingBox;
-import org.mapsforge.core.model.LatLong;
-import org.mapsforge.core.model.MapPosition;
-import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.*;
 import org.mapsforge.core.util.MercatorProjection;
+import org.mapsforge.core.util.Parameters;
 import org.mapsforge.map.model.common.Observable;
 import org.mapsforge.map.model.common.Persistable;
 import org.mapsforge.map.model.common.PreferencesFacade;
 import org.mapsforge.map.util.PausableThread;
 
-public class MapViewPosition extends Observable implements IMapViewPosition, Persistable {
+public class MapViewPosition extends Observable implements Persistable {
 
     private class Animator extends PausableThread {
 
@@ -75,7 +73,7 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
             moveCenter(stepSizeX * signX, stepSizeY * signY);
         }
 
-        private void doWorkZoom() throws InterruptedException {
+        private void doWorkZoom() {
             if (!this.zoomAnimation)
                 return;
             if (System.currentTimeMillis() >= this.timeEnd) {
@@ -100,7 +98,11 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
 
         void startAnimationMove(LatLong latLong) {
             // TODO is this properly synchronized?
-            mapSize = MercatorProjection.getMapSize(zoomLevel, displayModel.getTileSize());
+            if (Parameters.FRACTIONAL_ZOOM) {
+                mapSize = MercatorProjection.getMapSizeWithScaleFactor(scaleFactor, displayModel.getTileSize());
+            } else {
+                mapSize = MercatorProjection.getMapSize(zoomLevel, displayModel.getTileSize());
+            }
             targetPixelX = MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize);
             targetPixelY = MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize);
             moveSteps = DEFAULT_MOVE_STEPS;
@@ -122,12 +124,17 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
         }
     }
 
+    private static final double LOG_2 = Math.log(2);
+
     private static final String LATITUDE = "latitude";
     private static final String LATITUDE_MAX = "latitudeMax";
     private static final String LATITUDE_MIN = "latitudeMin";
     private static final String LONGITUDE = "longitude";
     private static final String LONGITUDE_MAX = "longitudeMax";
     private static final String LONGITUDE_MIN = "longitudeMin";
+    private static final String ROTATION_ANGLE = "rotationAngle";
+    private static final String ROTATION_PX = "rotationPx";
+    private static final String ROTATION_PY = "rotationPy";
     private static final String ZOOM_LEVEL = "zoomLevel";
     private static final String ZOOM_LEVEL_MAX = "zoomLevelMax";
     private static final String ZOOM_LEVEL_MIN = "zoomLevelMin";
@@ -146,7 +153,10 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     private final DisplayModel displayModel;
     private double latitude, longitude;
     private BoundingBox mapLimit;
+    private float mapViewCenterX = 0.5f;
+    private float mapViewCenterY = 0.5f;
     private LatLong pivot;
+    private Rotation rotation;
     private double scaleFactor;
     private byte zoomLevel, zoomLevelMax, zoomLevelMin;
 
@@ -156,30 +166,43 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
         this.zoomLevelMax = Byte.MAX_VALUE;
         this.animator = new Animator();
         this.animator.start();
+        this.rotation = Rotation.NULL_ROTATION;
+        this.scaleFactor = 1;
     }
 
     /**
-     * Animate the map towards the given position.
+     * Animates the map towards the given position (move). The given position will be at the center
+     * of the screen after the animation. The position is assured to be within the map limit.
      */
-    @Override
     public void animateTo(final LatLong latLong) {
         animator.startAnimationMove(latLong);
     }
 
-    @Override
+    /**
+     * @return true if animation is in progress or animation is in the queue for being processed.
+     */
     public boolean animationInProgress() {
-        return this.scaleFactor != MercatorProjection.zoomLevelToScaleFactor(this.zoomLevel);
+        if (Parameters.FRACTIONAL_ZOOM) {
+            return this.zoomLevel + 1 < getZoom();
+        } else {
+            return this.scaleFactor != MercatorProjection.zoomLevelToScaleFactor(this.zoomLevel);
+        }
     }
 
-    @Override
+    /**
+     * Destroys the class.
+     */
     public void destroy() {
         this.animator.finish();
     }
 
     /**
+     * Returns the current center position of the map. The position may change rapidly if an
+     * animation is in progress. If you are using animation consider keeping the positions and
+     * zoom factors in your code and not using this getter.
+     *
      * @return the current center position of the map.
      */
-    @Override
     public synchronized LatLong getCenter() {
         return new LatLong(this.latitude, this.longitude);
     }
@@ -187,17 +210,30 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     /**
      * @return the current limit of the map (might be null).
      */
-    @Override
     public synchronized BoundingBox getMapLimit() {
         return this.mapLimit;
     }
 
     /**
+     * Returns a newly instantiated object representing the current position and zoomlevel.
+     * Note that the position or zoomlevel may change rapidly if an animation is in progress.
+     *
      * @return the current center position and zoom level of the map.
      */
-    @Override
     public synchronized MapPosition getMapPosition() {
-        return new MapPosition(getCenter(), this.zoomLevel);
+        if (Parameters.FRACTIONAL_ZOOM) {
+            return new MapPosition(getCenter(), getZoom(), this.rotation);
+        } else {
+            return new MapPosition(getCenter(), this.zoomLevel, this.rotation);
+        }
+    }
+
+    public synchronized float getMapViewCenterX() {
+        return this.mapViewCenterX;
+    }
+
+    public synchronized float getMapViewCenterY() {
+        return this.mapViewCenterY;
     }
 
     /**
@@ -205,7 +241,6 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
      *
      * @return the lat/long coordinates of the map pivot point if set or null otherwise.
      */
-    @Override
     public synchronized LatLong getPivot() {
         return this.pivot;
     }
@@ -226,33 +261,55 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
         return null;
     }
 
-    @Override
+    public synchronized Rotation getRotation() {
+        return this.rotation;
+    }
+
+    /**
+     * Gets the current scale factor. The scale factor is normally 2^zoomLevel but it may differ if
+     * in between a zoom-animation or in between a pinch-to-zoom process.
+     * <p>
+     * Needed by mapsforge core classes.
+     */
     public synchronized double getScaleFactor() {
         return this.scaleFactor;
     }
 
     /**
+     * @return the current zoom of the map.
+     */
+    public synchronized double getZoom() {
+        return Math.log(this.scaleFactor) / LOG_2;
+    }
+
+    /**
      * @return the current zoom level of the map.
      */
-    @Override
     public synchronized byte getZoomLevel() {
         return this.zoomLevel;
     }
 
-    @Override
     public synchronized byte getZoomLevelMax() {
         return this.zoomLevelMax;
     }
 
-    @Override
     public synchronized byte getZoomLevelMin() {
         return this.zoomLevelMin;
     }
 
+    /**
+     * Initializes the class.
+     * <p>
+     * Needed by mapsforge core classes.
+     */
     @Override
     public synchronized void init(PreferencesFacade preferencesFacade) {
         this.latitude = preferencesFacade.getDouble(LATITUDE, 0);
         this.longitude = preferencesFacade.getDouble(LONGITUDE, 0);
+        float rotationAngle = preferencesFacade.getFloat(ROTATION_ANGLE, 0);
+        float rotationPx = preferencesFacade.getFloat(ROTATION_PX, 0);
+        float rotationPy = preferencesFacade.getFloat(ROTATION_PY, 0);
+        this.rotation = new Rotation(rotationAngle, rotationPx, rotationPy);
 
         double maxLatitude = preferencesFacade.getDouble(LATITUDE_MAX, Double.NaN);
         double minLatitude = preferencesFacade.getDouble(LATITUDE_MIN, Double.NaN);
@@ -273,41 +330,46 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
 
     /**
      * Animates the center position of the map by the given amount of pixels.
+     * <p>
+     * Used by TouchGestureHandler.
      *
      * @param moveHorizontal the amount of pixels to move this MapViewPosition horizontally.
      * @param moveVertical   the amount of pixels to move this MapViewPosition vertically.
      */
-    @Override
     public void moveCenter(double moveHorizontal, double moveVertical) {
         this.moveCenterAndZoom(moveHorizontal, moveVertical, (byte) 0, true);
     }
 
     /**
      * Moves the center position of the map by the given amount of pixels.
+     * <p>
+     * Used by TouchGestureHandler.
      *
      * @param moveHorizontal the amount of pixels to move this MapViewPosition horizontally.
      * @param moveVertical   the amount of pixels to move this MapViewPosition vertically.
      * @param animated       whether the move should be animated.
      */
-    @Override
     public void moveCenter(double moveHorizontal, double moveVertical, boolean animated) {
         this.moveCenterAndZoom(moveHorizontal, moveVertical, (byte) 0, animated);
     }
 
     /**
      * Animates the center position of the map by the given amount of pixels.
+     * <p>
+     * This method is used by the TouchGestureHandler to perform a zoom on double-tap action.
      *
      * @param moveHorizontal the amount of pixels to move this MapViewPosition horizontally.
      * @param moveVertical   the amount of pixels to move this MapViewPosition vertically.
      * @param zoomLevelDiff  the difference in desired zoom level.
      */
-    @Override
     public void moveCenterAndZoom(double moveHorizontal, double moveVertical, byte zoomLevelDiff) {
         moveCenterAndZoom(moveHorizontal, moveVertical, zoomLevelDiff, true);
     }
 
     /**
      * Moves the center position of the map by the given amount of pixels.
+     * <p>
+     * This method is used by the TouchGestureHandler to perform a zoom on double-tap action.
      *
      * @param moveHorizontal the amount of pixels to move this MapViewPosition horizontally.
      * @param moveVertical   the amount of pixels to move this MapViewPosition vertically.
@@ -316,9 +378,13 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
      */
     public void moveCenterAndZoom(double moveHorizontal, double moveVertical, byte zoomLevelDiff, boolean animated) {
         synchronized (this) {
-            long mapSize = MercatorProjection.getMapSize(this.zoomLevel, this.displayModel.getTileSize());
-            double pixelX = MercatorProjection.longitudeToPixelX(this.longitude, mapSize)
-                    - moveHorizontal;
+            long mapSize;
+            if (Parameters.FRACTIONAL_ZOOM) {
+                mapSize = MercatorProjection.getMapSizeWithScaleFactor(this.scaleFactor, this.displayModel.getTileSize());
+            } else {
+                mapSize = MercatorProjection.getMapSize(this.zoomLevel, this.displayModel.getTileSize());
+            }
+            double pixelX = MercatorProjection.longitudeToPixelX(this.longitude, mapSize) - moveHorizontal;
             double pixelY = MercatorProjection.latitudeToPixelY(this.latitude, mapSize) - moveVertical;
 
             pixelX = Math.min(Math.max(0, pixelX), mapSize);
@@ -327,15 +393,25 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
             double newLatitude = MercatorProjection.pixelYToLatitude(pixelY, mapSize);
             double newLongitude = MercatorProjection.pixelXToLongitude(pixelX, mapSize);
             setCenterInternal(newLatitude, newLongitude);
-            setZoomLevelInternal(this.zoomLevel + zoomLevelDiff, animated);
+            if (zoomLevelDiff != 0) {
+                setZoomLevelInternal(this.zoomLevel + zoomLevelDiff, animated);
+            }
         }
         notifyObservers();
     }
 
+    /**
+     * Saves the current state.
+     * <p>
+     * Needed by mapsforge core classes.
+     */
     @Override
     public synchronized void save(PreferencesFacade preferencesFacade) {
         preferencesFacade.putDouble(LATITUDE, this.latitude);
         preferencesFacade.putDouble(LONGITUDE, this.longitude);
+        preferencesFacade.putFloat(ROTATION_ANGLE, this.rotation.degrees);
+        preferencesFacade.putFloat(ROTATION_PX, this.rotation.px);
+        preferencesFacade.putFloat(ROTATION_PY, this.rotation.py);
 
         if (this.mapLimit == null) {
             preferencesFacade.putDouble(LATITUDE_MAX, Double.NaN);
@@ -356,8 +432,9 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
 
     /**
      * Sets the new center position of the map.
+     * <p>
+     * This is NOT animated.
      */
-    @Override
     public void setCenter(LatLong latLong) {
         synchronized (this) {
             setCenterInternal(latLong.latitude, latLong.longitude);
@@ -368,7 +445,6 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     /**
      * Sets the new limit of the map (might be null).
      */
-    @Override
     public void setMapLimit(BoundingBox mapLimit) {
         synchronized (this) {
             this.mapLimit = mapLimit;
@@ -379,9 +455,8 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     /**
      * Sets the new center position and zoom level of the map.
      * <p/>
-     * Note: The default zoom level changes are animated.
+     * The default zoom level changes are animated.
      */
-    @Override
     public void setMapPosition(MapPosition mapPosition) {
         setMapPosition(mapPosition, true);
     }
@@ -389,13 +464,35 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     /**
      * Sets the new center position and zoom level of the map.
      */
-    @Override
     public void setMapPosition(MapPosition mapPosition, boolean animated) {
         synchronized (this) {
             setCenterInternal(mapPosition.latLong.latitude, mapPosition.latLong.longitude);
-            setZoomLevelInternal(mapPosition.zoomLevel, animated);
+            if (Parameters.FRACTIONAL_ZOOM) {
+                setZoomInternal(mapPosition.zoom, animated);
+            } else {
+                setZoomLevelInternal(mapPosition.zoomLevel, animated);
+            }
+            setRotationInternal(mapPosition.rotation);
         }
         notifyObservers();
+    }
+
+    public void setMapViewCenterX(float mapViewCenterX) {
+        if (mapViewCenterX < 0 || mapViewCenterX > 1) {
+            throw new IllegalArgumentException("mapViewCenterX must be between 0 and 1: " + mapViewCenterX);
+        }
+        synchronized (this) {
+            this.mapViewCenterX = mapViewCenterX;
+        }
+    }
+
+    public void setMapViewCenterY(float mapViewCenterY) {
+        if (mapViewCenterY < 0 || mapViewCenterY > 1) {
+            throw new IllegalArgumentException("mapViewCenterY must be between 0 and 1: " + mapViewCenterY);
+        }
+        synchronized (this) {
+            this.mapViewCenterY = mapViewCenterY;
+        }
     }
 
     /**
@@ -406,7 +503,6 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
      *
      * @param pivot lat/long of pivot point, null for map center
      */
-    @Override
     public void setPivot(LatLong pivot) {
         synchronized (this) {
             this.pivot = pivot;
@@ -414,16 +510,25 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     }
 
     /**
-     * Sets the new scale factor to be applied.
+     * Sets the new rotation of the map.
      */
-    public void setScaleFactor(double scaleFactor) {
+    public void setRotation(Rotation rotation) {
         synchronized (this) {
-            this.scaleFactor = scaleFactor;
+            setRotationInternal(rotation);
         }
         notifyObservers();
     }
 
-    @Override
+    /**
+     * Sets the new scale factor to be applied.
+     */
+    public void setScaleFactor(double scaleFactor) {
+        synchronized (this) {
+            this.scaleFactor = Math.max(1, scaleFactor);
+        }
+        notifyObservers();
+    }
+
     public void setScaleFactorAdjustment(double adjustment) {
         synchronized (this) {
             this.setScaleFactor(Math.pow(2, zoomLevel) * adjustment);
@@ -432,25 +537,57 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     }
 
     /**
-     * Sets the new zoom level of the map.
-     * <p/>
-     * Note: The default zoom level changes are animated.
+     * Sets the new zoom of the map.
+     * <p>
+     * Animation is NOT used.
+     * <p>
+     * Implemented for external use, NOT used internally.
      *
+     * @param zoom new zoom.
+     * @throws IllegalArgumentException if the zoom is negative.
+     */
+    public void setZoom(double zoom) {
+        setZoom(zoom, true);
+    }
+
+    /**
+     * Sets the new zoom of the map.
+     *
+     * @param zoom     desired zoom
+     * @param animated true if the transition should be animated, false otherwise
+     * @throws IllegalArgumentException if the zoom is negative.
+     */
+    public void setZoom(double zoom, boolean animated) {
+        if (zoom < 0) {
+            throw new IllegalArgumentException("zoom must not be negative: " + zoom);
+        }
+        synchronized (this) {
+            setZoomInternal(zoom, animated);
+        }
+        notifyObservers();
+    }
+
+    /**
+     * Sets the new zoom level of the map.
+     * <p>
+     * Animation is NOT used.
+     * <p>
+     * Implemented for external use, NOT used internally.
+     *
+     * @param zoomLevel new zoom level.
      * @throws IllegalArgumentException if the zoom level is negative.
      */
-    @Override
     public void setZoomLevel(byte zoomLevel) {
         setZoomLevel(zoomLevel, true);
     }
 
     /**
-     * Sets the new zoom level of the map
+     * Sets the new zoom level of the map.
      *
      * @param zoomLevel desired zoom level
      * @param animated  true if the transition should be animated, false otherwise
      * @throws IllegalArgumentException if the zoom level is negative.
      */
-    @Override
     public void setZoomLevel(byte zoomLevel, boolean animated) {
         if (zoomLevel < 0) {
             throw new IllegalArgumentException("zoomLevel must not be negative: " + zoomLevel);
@@ -461,7 +598,6 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
         notifyObservers();
     }
 
-    @Override
     public void setZoomLevelMax(byte zoomLevelMax) {
         if (zoomLevelMax < 0) {
             throw new IllegalArgumentException("zoomLevelMax must not be negative: " + zoomLevelMax);
@@ -475,7 +611,6 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
         notifyObservers();
     }
 
-    @Override
     public void setZoomLevelMin(byte zoomLevelMin) {
         if (zoomLevelMin < 0) {
             throw new IllegalArgumentException("zoomLevelMin must not be negative: " + zoomLevelMin);
@@ -494,7 +629,6 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
      * <p/>
      * Note: The default zoom level changes are animated.
      */
-    @Override
     public void zoom(byte zoomLevelDiff) {
         zoom(zoomLevelDiff, true);
     }
@@ -510,37 +644,33 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
     }
 
     /**
-     * Increases the current zoom level by one if possible.
+     * Increases the current zoom level by one if possible. Zooming is always around the center.
      * <p/>
-     * Note: The default zoom level changes are animated.
+     * The default zoom level changes are animated.
      */
-    @Override
     public void zoomIn() {
         zoomIn(true);
     }
 
     /**
-     * Increases the current zoom level by one if possible.
+     * Increases the current zoom level by one if possible. Zooming is always around the center.
      */
-    @Override
     public void zoomIn(boolean animated) {
         zoom((byte) 1, animated);
     }
 
     /**
-     * Decreases the current zoom level by one if possible.
+     * Decreases the current zoom level by one if possible. Zooming is always around the center.
      * <p/>
-     * Note: The default zoom level changes are animated.
+     * The default zoom level changes are animated.
      */
-    @Override
     public void zoomOut() {
         zoomOut(true);
     }
 
     /**
-     * Decreases the current zoom level by one if possible.
+     * Decreases the current zoom level by one if possible. Zooming is always around the center.
      */
-    @Override
     public void zoomOut(boolean animated) {
         zoom((byte) -1, animated);
     }
@@ -552,6 +682,21 @@ public class MapViewPosition extends Observable implements IMapViewPosition, Per
         } else {
             this.latitude = Math.max(Math.min(latitude, this.mapLimit.maxLatitude), this.mapLimit.minLatitude);
             this.longitude = Math.max(Math.min(longitude, this.mapLimit.maxLongitude), this.mapLimit.minLongitude);
+        }
+    }
+
+    private void setRotationInternal(Rotation rotation) {
+        this.rotation = rotation;
+    }
+
+    private void setZoomInternal(double zoom, boolean animated) {
+        zoom = Math.max(Math.min(zoom, this.zoomLevelMax), this.zoomLevelMin);
+        this.zoomLevel = (byte) Math.floor(zoom);
+        if (animated) {
+            this.animator.startAnimationZoom(getScaleFactor(), Math.pow(2, zoom));
+        } else {
+            this.setScaleFactor(Math.pow(2, zoom));
+            this.setPivot(null);
         }
     }
 

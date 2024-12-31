@@ -1,6 +1,7 @@
 /*
  * Copyright 2015-2017 devemux86
  * Copyright 2017 Gustl22
+ * Copyright 2022 Juanjo-MC
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -20,11 +21,7 @@ import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Tag;
 import org.mapsforge.core.util.LatLongUtils;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Abstract implementation for the {@link PoiPersistenceManager} interface. This implementation
@@ -49,13 +46,13 @@ public abstract class AbstractPoiPersistenceManager implements PoiPersistenceMan
     @Override
     public Collection<PointOfInterest> findNearPosition(LatLong point, int distance,
                                                         PoiCategoryFilter filter, List<Tag> patterns,
-                                                        int limit) {
+                                                        LatLong orderBy, int limit, boolean findCategories) {
         double minLat = point.latitude - LatLongUtils.latitudeDistance(distance);
         double minLon = point.longitude - LatLongUtils.longitudeDistance(distance, point.latitude);
         double maxLat = point.latitude + LatLongUtils.latitudeDistance(distance);
         double maxLon = point.longitude + LatLongUtils.longitudeDistance(distance, point.latitude);
 
-        return findInRect(new BoundingBox(minLat, minLon, maxLat, maxLon), filter, patterns, limit);
+        return findInRect(new BoundingBox(minLat, minLon, maxLat, maxLon), filter, patterns, orderBy, limit, findCategories);
     }
 
     /**
@@ -91,21 +88,27 @@ public abstract class AbstractPoiPersistenceManager implements PoiPersistenceMan
      *
      * @param filter  The filter object for determining all wanted categories (may be null).
      * @param count   Count of patterns to search in points of interest data (may be 0).
-     * @param version POI specification version.
+     * @param orderBy {@link LatLong} location of the sort.
      * @return The SQL query.
      */
-    protected static String getSQLSelectString(PoiCategoryFilter filter, int count, int version) {
+    protected static String getSQLSelectString(PoiCategoryFilter filter, int count, LatLong orderBy) {
         if (filter != null) {
-            return PoiCategoryRangeQueryGenerator.getSQLSelectString(filter, count, version);
+            return PoiCategoryRangeQueryGenerator.getSQLSelectString(filter, count, orderBy);
         }
         StringBuilder sb = new StringBuilder();
         sb.append(DbConstants.FIND_IN_BOX_CLAUSE_SELECT);
-        if (count > 0) {
-            sb.append(DbConstants.JOIN_DATA_CLAUSE);
-        }
+        sb.append(DbConstants.JOIN_DATA_CLAUSE);
         sb.append(DbConstants.FIND_IN_BOX_CLAUSE_WHERE);
         for (int i = 0; i < count; i++) {
+            sb.append(i == 0 ? " AND (" : " OR ");
             sb.append(DbConstants.FIND_BY_DATA_CLAUSE);
+            if (i == count - 1) {
+                sb.append(")");
+            }
+        }
+        if (orderBy != null) {
+            sb.append(" ORDER BY ((").append(orderBy.latitude).append(" - poi_index.lat) * (").append(orderBy.latitude).append(" - poi_index.lat))")
+                    .append(" + ((").append(orderBy.longitude).append(" - poi_index.lon) * (").append(orderBy.longitude).append(" - poi_index.lon)) ASC");
         }
         return sb.append(" LIMIT ?;").toString();
     }
@@ -126,10 +129,9 @@ public abstract class AbstractPoiPersistenceManager implements PoiPersistenceMan
         String[] split = data.split("\r");
         for (String s : split) {
             if (s.indexOf(Tag.KEY_VALUE_SEPARATOR) > -1) {
-                String[] keyValue = s.split(String.valueOf(Tag.KEY_VALUE_SEPARATOR));
-                if (keyValue.length == 2) {
-                    tags.add(new Tag(keyValue[0], keyValue[1]));
-                }
+                String key = s.split(String.valueOf(Tag.KEY_VALUE_SEPARATOR))[0];
+                String value = s.substring(key.length() + 1);
+                tags.add(new Tag(key, value));
             }
         }
         return tags;

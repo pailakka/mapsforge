@@ -6,8 +6,6 @@ Processing of coastlines was part of Mapsforge rendering engine, running live on
 
 The workaround requires no real changes to the map-writer nor the map-reader, as it just uses the render theme mechanism.
 
-![Screenshot MultiMap1](images/multimap1.png)
-
 ## Land
 
 First of all we need a good set of either land or sea areas. OSM data does not natively have this as coastlines, as opposed to all other data for areas, are just lines. The main OSM renderers all employ some sort of intermediate processing to get the sea and land areas right.
@@ -22,7 +20,7 @@ ogr2ogr -overwrite -progress -skipfailures -clipsrc $LEFT $BOTTOM $RIGHT $TOP la
 
 This produces, depending on the bounds, a much smaller coastline shapefile. We usually extend the boundaries of this file a bit over the actual area for the map, to make sure we don't get any funny cut-offs.
 
-Then we convert the resulting shapefile with [shape2osm.py](https://github.com/mapsforge/mapsforge-creator/blob/master/shape2osm.py) (Python 2.x) and slight modifications (as are always required with shape2osm). We have set:
+Then we convert the resulting shapefile with [shape2osm.py](https://github.com/mapsforge/mapsforge-creator/blob/master/shape2osm.py) (Python 3.x) and slight modifications (as are always required with shape2osm). We have set:
 
 ```python
 fixed_tags = {
@@ -34,7 +32,7 @@ fixed_tags = {
 which will attach this tag to all polygons. We also changed the starting id for the OSM ids, as otherwise there is chance of collision with real OSM ids, which will create strange artifacts, like lines running through the map. We also changed the setting for the maximum length of ways, which does not seem to cause a problem.
 
 ```bash
-python shape2osm.py -l land land.shp
+python3 shape2osm.py -l land land.shp
 ```
 
 We now have `land1.osm`, an OSM XML file with land represented as polygons with the tag "natural" -> "nosea".
@@ -132,7 +130,7 @@ With the above procedure complicated coastline areas are all now rendered correc
 
 We use land polygons from [OpenStreetMap Data](https://osmdata.openstreetmap.de/), specifically the https://osmdata.openstreetmap.de/download/simplified-land-polygons-complete-3857.zip variant.
 
-The process is completed successfully in some minutes giving the map in our [server](https://download.mapsforge.org/maps/world/).
+The process is completed successfully in some minutes giving the map in our [server](https://download.mapsforge.org/maps/v5/world/).
 Alternatively the non simplified variants can be used too.
 
 To convert shp files in osm / pbf format there are many [tools](http://wiki.openstreetmap.org/wiki/Software_comparison/Import_a_shapefile) available.

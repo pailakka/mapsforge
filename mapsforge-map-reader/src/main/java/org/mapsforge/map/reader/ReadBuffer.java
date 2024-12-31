@@ -51,7 +51,7 @@ public class ReadBuffer {
     }
 
     /**
-     * Returns one signed byte from the read buffer.
+     * Returns one byte from the read buffer.
      *
      * @return the byte value.
      */
@@ -89,7 +89,7 @@ public class ReadBuffer {
             try {
                 this.bufferData = new byte[length];
             } catch (Throwable t) {
-                LOGGER.log(Level.SEVERE, t.getMessage(), t);
+                LOGGER.log(Level.SEVERE, t.toString(), t);
                 return false;
             }
             this.bufferWrapper = ByteBuffer.wrap(this.bufferData, 0, length);
@@ -122,7 +122,7 @@ public class ReadBuffer {
             try {
                 this.bufferData = new byte[length];
             } catch (Throwable t) {
-                LOGGER.log(Level.SEVERE, t.getMessage(), t);
+                LOGGER.log(Level.SEVERE, t.toString(), t);
                 return false;
             }
             this.bufferWrapper = ByteBuffer.wrap(this.bufferData, 0, length);
@@ -202,7 +202,6 @@ public class ReadBuffer {
     }
 
     List<Tag> readTags(Tag[] tagsArray, byte numberOfTags) {
-        List<Tag> tags = new ArrayList<>();
         tagIds.clear();
 
         int maxTag = tagsArray.length;
@@ -216,6 +215,7 @@ public class ReadBuffer {
             tagIds.add(tagId);
         }
 
+        List<Tag> tags = new ArrayList<>();
         for (int tagId : tagIds) {
             Tag tag = tagsArray[tagId];
             // Decode variable values of tags

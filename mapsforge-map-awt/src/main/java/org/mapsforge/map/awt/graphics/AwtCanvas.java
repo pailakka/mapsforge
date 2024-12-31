@@ -1,11 +1,12 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
- * Copyright 2014-2019 devemux86
+ * Copyright 2014-2021 devemux86
  * Copyright 2017 usrusr
  * Copyright 2019 cpt1gl0
  * Copyright 2019 Adrian Batzill
  * Copyright 2019 Matthew Egeler
  * Copyright 2019 mg4gh
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -26,15 +27,16 @@ import org.mapsforge.core.graphics.Paint;
 import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.model.Dimension;
 import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.util.Parameters;
 
 import java.awt.*;
-import java.awt.color.ColorSpace;
 import java.awt.font.TextLayout;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.Rectangle2D;
-import java.awt.image.*;
+import java.awt.image.BufferedImage;
+import java.awt.image.IndexColorModel;
 import java.util.AbstractMap;
 import java.util.Map;
 
@@ -43,9 +45,8 @@ class AwtCanvas implements Canvas {
 
     private BufferedImage bufferedImage;
     private Graphics2D graphics2D;
-    private BufferedImageOp grayscaleOp, invertOp, invertOp4;
 
-    private static final java.awt.Color NEUTRAL_HILLS = new java.awt.Color(127, 127, 127);
+    private static final java.awt.Color NEUTRAL_HILLS = AwtGraphicFactory.getColor(Color.TRANSPARENT);
     private static Map.Entry<Float, Composite> sizeOneShadingCompositeCache = null;
     private final AffineTransform transform = new AffineTransform();
 
@@ -58,7 +59,7 @@ class AwtCanvas implements Canvas {
             return existing.getValue();
         }
 
-        Composite selected = selectHillShadingComposite(magnitude);
+        Composite selected = AlphaComposite.getInstance(AlphaComposite.SRC_ATOP, magnitude);
 
         if (sizeOneShadingCompositeCache == null) {
             // only cache the first magnitude value, in the rare instance that more than one
@@ -70,82 +71,12 @@ class AwtCanvas implements Canvas {
         return selected;
     }
 
-    /**
-     * Composite selection, select between {@link AlphaComposite} (fast, squashes saturation at high magnitude)
-     * and {@link AwtLuminanceShadingComposite} (per-pixel rgb->hsv->rgb conversion to keep saturation at high magnitude,
-     * might be a bit slow and/or inconsistent with the android implementation)
-     */
-    private static Composite selectHillShadingComposite(float magnitude) {
-        //return new AwtLuminanceShadingComposite(magnitude);
-        return AlphaComposite.getInstance(AlphaComposite.SRC_ATOP, magnitude);
-    }
-
     AwtCanvas() {
-        createFilters();
     }
 
     AwtCanvas(Graphics2D graphics2D) {
         this.graphics2D = graphics2D;
         setAntiAlias(Parameters.ANTI_ALIASING);
-
-        createFilters();
-    }
-
-    private BufferedImage applyFilter(BufferedImage src, Filter filter) {
-        if (filter == Filter.NONE) {
-            return src;
-        }
-        BufferedImage dest = null;
-        switch (filter) {
-            case GRAYSCALE:
-                dest = new BufferedImage(src.getWidth(), src.getHeight(), src.getType());
-                this.grayscaleOp.filter(src, dest);
-                break;
-            case GRAYSCALE_INVERT:
-                dest = new BufferedImage(src.getWidth(), src.getHeight(), src.getType());
-                this.grayscaleOp.filter(src, dest);
-                dest = applyInvertFilter(dest);
-                break;
-            case INVERT:
-                dest = applyInvertFilter(src);
-                break;
-        }
-        return dest;
-    }
-
-    private BufferedImage applyInvertFilter(BufferedImage src) {
-        final BufferedImage newSrc;
-        if (src.getColorModel() instanceof IndexColorModel) {
-            newSrc = new BufferedImage(src.getWidth(), src.getHeight(), src.getColorModel().getNumComponents() == 3 ? BufferedImage.TYPE_INT_RGB : BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2 = newSrc.createGraphics();
-            g2.drawImage(src, 0, 0, null);
-            g2.dispose();
-        } else {
-            newSrc = src;
-        }
-        BufferedImage dest = new BufferedImage(newSrc.getWidth(), newSrc.getHeight(), newSrc.getType());
-        switch (newSrc.getColorModel().getNumComponents()) {
-            case 3:
-                this.invertOp.filter(newSrc, dest);
-                break;
-            case 4:
-                this.invertOp4.filter(newSrc, dest);
-                break;
-        }
-        return dest;
-    }
-
-    private void createFilters() {
-        this.grayscaleOp = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null);
-
-        short[] invert = new short[256];
-        short[] straight = new short[256];
-        for (int i = 0; i < 256; i++) {
-            invert[i] = (short) (255 - i);
-            straight[i] = (short) i;
-        }
-        this.invertOp = new LookupOp(new ShortLookupTable(0, invert), null);
-        this.invertOp4 = new LookupOp(new ShortLookupTable(0, new short[][]{invert, invert, invert, straight}), null);
     }
 
     @Override
@@ -155,16 +86,22 @@ class AwtCanvas implements Canvas {
 
     @Override
     public void drawBitmap(Bitmap bitmap, int left, int top) {
-        this.graphics2D.drawImage(AwtGraphicFactory.getBitmap(bitmap), left, top, null);
+        final BufferedImage awtBitmap = AwtGraphicFactory.getBitmap(bitmap);
+        if (awtBitmap.getColorModel() instanceof IndexColorModel) {
+            // We need to clear the existing alpha to get a clean overwrite
+            // (this is currently expected only for hill shading bitmaps)
+            fillColor(Color.TRANSPARENT);
+        }
+        this.graphics2D.drawImage(awtBitmap, left, top, null);
     }
 
     @Override
-    public void drawBitmap(Bitmap bitmap, int left, int top, float alpha, Filter filter) {
+    public void drawBitmap(Bitmap bitmap, int left, int top, float alpha) {
         Composite composite = this.graphics2D.getComposite();
         if (alpha != 1) {
             this.graphics2D.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         }
-        this.graphics2D.drawImage(applyFilter(AwtGraphicFactory.getBitmap(bitmap), filter), left, top, null);
+        this.graphics2D.drawImage(AwtGraphicFactory.getBitmap(bitmap), left, top, null);
         if (alpha != 1) {
             this.graphics2D.setComposite(composite);
         }
@@ -177,12 +114,12 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
-    public void drawBitmap(Bitmap bitmap, Matrix matrix, float alpha, Filter filter) {
+    public void drawBitmap(Bitmap bitmap, Matrix matrix, float alpha) {
         Composite composite = this.graphics2D.getComposite();
         if (alpha != 1) {
             this.graphics2D.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         }
-        this.graphics2D.drawRenderedImage(applyFilter(AwtGraphicFactory.getBitmap(bitmap), filter), AwtGraphicFactory.getAffineTransform(matrix));
+        this.graphics2D.drawRenderedImage(AwtGraphicFactory.getBitmap(bitmap), AwtGraphicFactory.getAffineTransform(matrix));
         if (alpha != 1) {
             this.graphics2D.setComposite(composite);
         }
@@ -199,12 +136,12 @@ class AwtCanvas implements Canvas {
 
     @Override
     public void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
-                           int dstLeft, int dstTop, int dstRight, int dstBottom, float alpha, Filter filter) {
+                           int dstLeft, int dstTop, int dstRight, int dstBottom, float alpha) {
         Composite composite = this.graphics2D.getComposite();
         if (alpha != 1) {
             this.graphics2D.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         }
-        this.graphics2D.drawImage(applyFilter(AwtGraphicFactory.getBitmap(bitmap), filter),
+        this.graphics2D.drawImage(AwtGraphicFactory.getBitmap(bitmap),
                 dstLeft, dstTop, dstRight, dstBottom,
                 srcLeft, srcTop, srcRight, srcBottom,
                 null);
@@ -361,7 +298,7 @@ class AwtCanvas implements Canvas {
 
     @Override
     public void fillColor(int color) {
-        fillColor(new java.awt.Color(color));
+        fillColor(new java.awt.Color(color, true));
     }
 
     @Override
@@ -400,6 +337,30 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
+    public void restore() {
+        // no-op here
+    }
+
+    @Override
+    public void rotate(float degrees, float px, float py) {
+        if (degrees != 0) {
+            this.graphics2D.rotate(degrees, px, py);
+        }
+    }
+
+    @Override
+    public void rotate(Rotation rotation) {
+        if (!Rotation.noRotation(rotation)) {
+            rotate(rotation.degrees, rotation.px, rotation.py);
+        }
+    }
+
+    @Override
+    public void save() {
+        // no-op here
+    }
+
+    @Override
     public void setAntiAlias(boolean aa) {
         this.graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa ? RenderingHints.VALUE_ANTIALIAS_ON : RenderingHints.VALUE_ANTIALIAS_OFF);
         this.graphics2D.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, aa ? RenderingHints.VALUE_TEXT_ANTIALIAS_ON : RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
@@ -418,6 +379,13 @@ class AwtCanvas implements Canvas {
             this.graphics2D.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
             this.graphics2D.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
         }
+    }
+
+    @Override
+    public void setBitmap(Bitmap bitmap, float dx, float dy, float degrees, float px, float py) {
+        translate(dx, dy);
+        rotate(degrees, px, py);
+        setBitmap(bitmap);
     }
 
     @Override
@@ -443,7 +411,7 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
-    public void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude) {
+    public void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude, int color) {
         Composite oldComposite = this.graphics2D.getComposite();
         Composite composite = getHillshadingComposite(magnitude);
         this.graphics2D.setComposite(composite);
@@ -463,25 +431,45 @@ class AwtCanvas implements Canvas {
             return;
         }
 
+        if (shadeRect.getWidth() != 0 && shadeRect.getHeight() != 0) {
+            final double horizontalScale = tileRect.getWidth() / shadeRect.getWidth();
+            final double verticalScale = tileRect.getHeight() / shadeRect.getHeight();
 
-        BufferedImage bufferedImage = AwtGraphicFactory.getBitmap(bitmap);
-        transform.setToIdentity();
+            // Using a rectangle slightly larger than necessary to prevent resize artifacts
+            final int srcLeft = Math.max(0, (int) shadeRect.left - 1);
+            final int srcTop = Math.max(0, (int) shadeRect.top - 1);
+            final int srcWidth = Math.min(bitmap.getWidth() - srcLeft, (int) shadeRect.getWidth() + 4);
+            final int srcHeight = Math.min(bitmap.getHeight() - srcTop, (int) shadeRect.getHeight() + 4);
 
-        double horizontalScale = tileRect.getWidth() / shadeRect.getWidth();
-        double verticalScale = tileRect.getHeight() / shadeRect.getHeight();
+            // (2024-10) Sub-image is extracted to prevent needless upscaling of the entire hill shading bitmap with the transform below.
+            // This would waste large amounts of memory and CPU time when only a small part of the bitmap is really needed,
+            // and could potentially cause an OOM exception, especially on larger zoom levels when horizontalScale and verticalScale become very large.
+            // Note: It appears that Android is not susceptible to this problem, only AWT.
+            final BufferedImage subImage = AwtGraphicFactory
+                    .getBitmap(bitmap)
+                    .getSubimage(srcLeft, srcTop, srcWidth, srcHeight);
 
-        transform.translate(tileRect.left, tileRect.top);
-        transform.scale(horizontalScale, verticalScale);
-        transform.translate(-shadeRect.left, -shadeRect.top);
+            transform.setToIdentity();
+            transform.translate(tileRect.left, tileRect.top);
+            transform.scale(horizontalScale, verticalScale);
+            transform.translate(-(shadeRect.left - srcLeft), -(shadeRect.top - srcTop));
 
-        this.graphics2D.setClip(
-                (int) Math.round(tileRect.left), (int) Math.round(tileRect.top),
-                (int) Math.round(tileRect.right - (int) tileRect.left), (int) Math.round(tileRect.bottom) - (int) Math.round(tileRect.top) // subtract in after rounding to get same error as on neighbor tile
-        );
-        this.graphics2D.drawRenderedImage(bufferedImage, transform);
-        this.graphics2D.setClip(null);
+            this.graphics2D.setClip(
+                    (int) Math.round(tileRect.left), (int) Math.round(tileRect.top),
+                    (int) Math.round(tileRect.right) - (int) Math.round(tileRect.left), (int) Math.round(tileRect.bottom) - (int) Math.round(tileRect.top) // subtract in after rounding to get same error as on neighbor tile
+            );
+
+            this.graphics2D.drawRenderedImage(subImage, transform);
+
+            this.graphics2D.setClip(null);
+        }
 
         this.graphics2D.setComposite(oldComposite);
+    }
+
+    @Override
+    public void translate(float dx, float dy) {
+        this.graphics2D.translate(dx, dy);
     }
 
     private void fillColor(java.awt.Color color) {

@@ -3,6 +3,7 @@
  * Copyright 2014-2015 Ludwig M Brinckmann
  * Copyright 2014-2019 devemux86
  * Copyright 2020 Adrian Batzill
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -48,13 +49,16 @@ public class Caption extends RenderInstruction {
     private final Map<Byte, Paint> fills;
     private float fontSize;
     private final float gap;
-    private final int maxTextWidth;
+    private int maxTextWidth;
     private Position position;
     private int priority;
     private final Paint stroke;
     private final Map<Byte, Paint> strokes;
     private String symbolId;
     private TextKey textKey;
+    private TextTransform textTransform;
+
+    private final Object mySync = new Object();
 
     public Caption(GraphicFactory graphicFactory, DisplayModel displayModel, String elementName,
                    XmlPullParser pullParser, Map<String, Symbol> symbols) throws XmlPullParserException {
@@ -70,10 +74,11 @@ public class Caption extends RenderInstruction {
         this.strokes = new HashMap<>();
         this.dyScaled = new HashMap<>();
 
-
         this.display = Display.IFSPACE;
 
         this.gap = DEFAULT_GAP * displayModel.getScaleFactor();
+        this.textTransform = TextTransform.NONE;
+        this.maxTextWidth = displayModel.getMaxTextWidth();
 
         extractValues(graphicFactory, displayModel, elementName, pullParser);
 
@@ -92,32 +97,6 @@ public class Caption extends RenderInstruction {
                 this.position = Position.BELOW;
             }
         }
-        switch (this.position) {
-            case CENTER:
-            case BELOW:
-            case ABOVE:
-                this.stroke.setTextAlign(Align.CENTER);
-                this.fill.setTextAlign(Align.CENTER);
-                break;
-            case BELOW_LEFT:
-            case ABOVE_LEFT:
-            case LEFT:
-                this.stroke.setTextAlign(Align.RIGHT);
-                this.fill.setTextAlign(Align.RIGHT);
-                break;
-            case BELOW_RIGHT:
-            case ABOVE_RIGHT:
-            case RIGHT:
-                this.stroke.setTextAlign(Align.LEFT);
-                this.fill.setTextAlign(Align.LEFT);
-                break;
-            default:
-                throw new IllegalArgumentException("Position invalid");
-        }
-
-
-        this.maxTextWidth = displayModel.getMaxTextWidth();
-
     }
 
     private float computeHorizontalOffset() {
@@ -184,8 +163,17 @@ public class Caption extends RenderInstruction {
                 this.stroke.setStrokeWidth(XmlUtils.parseNonNegativeFloat(name, value) * displayModel.getScaleFactor());
             } else if (SYMBOL_ID.equals(name)) {
                 this.symbolId = value;
+            } else if (TEXT_TRANSFORM.equals(name)) {
+                this.textTransform = TextTransform.fromString(value);
+            } else if (TEXT_WRAP_WIDTH .equals(name)) {
+                int maxWidth = (int) (XmlUtils.parseNonNegativeInteger(name, value) * displayModel.getScaleFactor());
+                if (maxWidth == 0) {
+                    maxTextWidth = Integer.MAX_VALUE;
+                } else {
+                    maxTextWidth = maxWidth;
+                }
             } else {
-                throw XmlUtils.createXmlPullParserException(elementName, name, value, i);
+                XmlUtils.logUnknownAttribute(elementName, name, value, i);
             }
         }
 
@@ -217,25 +205,28 @@ public class Caption extends RenderInstruction {
             return;
         }
 
-        String caption = this.textKey.getValue(poi.tags);
-        if (caption == null) {
-            return;
+        synchronized (mySync) {
+            String caption = this.textKey.getValue(poi.tags);
+            if (caption == null) {
+                return;
+            }
+
+            float horizontalOffset = 0f;
+
+            Float verticalOffset = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
+            if (verticalOffset == null) {
+                verticalOffset = this.dy;
+            }
+
+            if (this.boundary != null) {
+                horizontalOffset = computeHorizontalOffset();
+                verticalOffset = computeVerticalOffset(renderContext.rendererJob.tile.zoomLevel);
+            }
+
+            renderCallback.renderPointOfInterestCaption(renderContext, this.display, this.priority,
+                    transformText(caption, textTransform), horizontalOffset, verticalOffset,
+                    getFillPaint(renderContext.rendererJob.tile.zoomLevel), getStrokePaint(renderContext.rendererJob.tile.zoomLevel), this.position, this.maxTextWidth, poi);
         }
-
-        float horizontalOffset = 0f;
-
-        Float verticalOffset = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
-        if (verticalOffset == null) {
-            verticalOffset = this.dy;
-        }
-
-        if (this.boundary != null) {
-            horizontalOffset = computeHorizontalOffset();
-            verticalOffset = computeVerticalOffset(renderContext.rendererJob.tile.zoomLevel);
-        }
-
-        renderCallback.renderPointOfInterestCaption(renderContext, this.display, this.priority, caption, horizontalOffset, verticalOffset,
-                getFillPaint(renderContext.rendererJob.tile.zoomLevel), getStrokePaint(renderContext.rendererJob.tile.zoomLevel), this.position, this.maxTextWidth, poi);
     }
 
     @Override
@@ -244,24 +235,27 @@ public class Caption extends RenderInstruction {
             return;
         }
 
-        String caption = this.textKey.getValue(way.getTags());
-        if (caption == null) {
-            return;
-        }
+        synchronized (mySync) {
+            String caption = this.textKey.getValue(way.getTags());
+            if (caption == null) {
+                return;
+            }
 
-        float horizontalOffset = 0f;
-        Float verticalOffset = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
-        if (verticalOffset == null) {
-            verticalOffset = this.dy;
-        }
+            float horizontalOffset = 0f;
+            Float verticalOffset = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
+            if (verticalOffset == null) {
+                verticalOffset = this.dy;
+            }
 
-        if (this.boundary != null) {
-            horizontalOffset = computeHorizontalOffset();
-            verticalOffset = computeVerticalOffset(renderContext.rendererJob.tile.zoomLevel);
-        }
+            if (this.boundary != null) {
+                horizontalOffset = computeHorizontalOffset();
+                verticalOffset = computeVerticalOffset(renderContext.rendererJob.tile.zoomLevel);
+            }
 
-        renderCallback.renderAreaCaption(renderContext, this.display, this.priority, caption, horizontalOffset, verticalOffset,
-                getFillPaint(renderContext.rendererJob.tile.zoomLevel), getStrokePaint(renderContext.rendererJob.tile.zoomLevel), this.position, this.maxTextWidth, way);
+            renderCallback.renderAreaCaption(renderContext, this.display, this.priority,
+                    transformText(caption, textTransform), horizontalOffset, verticalOffset,
+                    getFillPaint(renderContext.rendererJob.tile.zoomLevel), getStrokePaint(renderContext.rendererJob.tile.zoomLevel), this.position, this.maxTextWidth, way);
+        }
     }
 
     @Override
@@ -271,14 +265,16 @@ public class Caption extends RenderInstruction {
 
     @Override
     public void scaleTextSize(float scaleFactor, byte zoomLevel) {
-        Paint f = graphicFactory.createPaint(this.fill);
-        f.setTextSize(this.fontSize * scaleFactor);
-        this.fills.put(zoomLevel, f);
+        synchronized (mySync) {
+            Paint f = graphicFactory.createPaint(this.fill);
+            f.setTextSize(this.fontSize * scaleFactor);
+            this.fills.put(zoomLevel, f);
 
-        Paint s = graphicFactory.createPaint(this.stroke);
-        s.setTextSize(this.fontSize * scaleFactor);
-        this.strokes.put(zoomLevel, s);
+            Paint s = graphicFactory.createPaint(this.stroke);
+            s.setTextSize(this.fontSize * scaleFactor);
+            this.strokes.put(zoomLevel, s);
 
-        this.dyScaled.put(zoomLevel, this.dy * scaleFactor);
+            this.dyScaled.put(zoomLevel, this.dy * scaleFactor);
+        }
     }
 }

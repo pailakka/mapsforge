@@ -119,7 +119,8 @@ public final class OSMUtils {
 
                 String defaultName = null;
                 List<String> restPreferredLanguages = new ArrayList<String>(preferredLanguages);
-                for (Tag tag : tags) {
+                for (int i = 0, n = tags.size(); i < n; i++) {
+                    Tag tag = tags.get(i);
                     String key = tag.getKey().toLowerCase(Locale.ENGLISH);
                     if ("name".equals(key)) { // Default 'name'
                         defaultName = tag.getValue();
@@ -144,7 +145,8 @@ public final class OSMUtils {
                 if (!restPreferredLanguages.isEmpty()) {
                     Map<String, String> fallbacks = new HashMap<String, String>();
                     for (String preferredLanguage : restPreferredLanguages) {
-                        for (Tag tag : tags) {
+                        for (int i = 0, n = tags.size(); i < n; i++) {
+                            Tag tag = tags.get(i);
                             String key = tag.getKey().toLowerCase(Locale.ENGLISH);
                             Matcher matcher = NAME_LANGUAGE_PATTERN.matcher(key);
                             if (!matcher.matches()) {
@@ -264,7 +266,7 @@ public final class OSMUtils {
                 LOGGER.finest("ColorHex: #" + Integer.toHexString(integer));
             } catch (NumberFormatException e) {
                 integer = 0;
-                LOGGER.warning("Color conversion failed: " + value + "\n" + e.getMessage());
+                LOGGER.warning("Color conversion failed: " + value + "\n" + e.toString());
             }
         } else {
             integer = OSMUtils.parseDoubleUnit(value).intValue();

@@ -1,6 +1,6 @@
 /*
  * Copyright 2013-2015 Ludwig M Brinckmann
- * Copyright 2014-2020 devemux86
+ * Copyright 2014-2022 devemux86
  * Copyright 2017 usrusr
  *
  * This program is free software: you can redistribute it and/or modify it under the
@@ -91,6 +91,7 @@ public class Samples extends Activity {
         LinearLayout linearLayout = findViewById(R.id.samples);
         linearLayout.addView(createButton(GettingStarted.class));
         linearLayout.addView(createLabel(null));
+        linearLayout.addView(createButton(MapsforgeMapViewer.class));
         linearLayout.addView(createButton(SimplestMapViewer.class));
         linearLayout.addView(createButton(DiagnosticsMapViewer.class));
 
@@ -102,10 +103,14 @@ public class Samples extends Activity {
                 startupDialog("poi", R.string.startup_message_poi, PoiSearchViewer.class);
             }
         }));
+        linearLayout.addView(createButton(RotationMapViewer.class));
 
         linearLayout.addView(createLabel("Vector Features"));
         linearLayout.addView(createButton(MultiLingualMapViewer.class));
         linearLayout.addView(createButton(StyleMenuMapViewer.class));
+        linearLayout.addView(createButton(LabelLayerUsingLabelCacheMapViewer.class));
+        linearLayout.addView(createButton(LabelLayerUsingMapDataStoreMapViewer.class));
+        linearLayout.addView(createButton(HillshadingMapViewer.class));
 
         linearLayout.addView(createLabel("Raster Maps"));
         linearLayout.addView(createButton(DownloadLayerViewer.class));
@@ -125,7 +130,6 @@ public class Samples extends Activity {
         linearLayout.addView(createLabel("User Interaction"));
         linearLayout.addView(createButton(LongPressAction.class));
         linearLayout.addView(createButton(ItemListActivity.class));
-        linearLayout.addView(createButton(RotateMapViewer.class));
 
         linearLayout.addView(createLabel("Dual Map Views"));
         linearLayout.addView(createButton(DualMapViewer.class));
@@ -143,7 +147,7 @@ public class Samples extends Activity {
                             // TODO show progress and wait for download
                             DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
                             DownloadManager.Request downloadRequest = new DownloadManager.Request(
-                                    Uri.parse("https://download.mapsforge.org/maps/world/world.map"));
+                                    Uri.parse("https://download.mapsforge.org/maps/v5/world/world.map"));
                             downloadRequest.setDescription("Mapsforge low-res world map");
                             downloadRequest.setDestinationInExternalFilesDir(Samples.this, null, MultiMapLowResWorld.getWorldMapFileName());
                             downloadManager.enqueue(downloadRequest);
@@ -157,10 +161,7 @@ public class Samples extends Activity {
         }));
 
         linearLayout.addView(createLabel("Experiments"));
-        linearLayout.addView(createButton(HillshadingMapViewer.class));
         linearLayout.addView(createButton(ReverseGeocodeViewer.class));
-        linearLayout.addView(createButton(LabelLayerUsingLabelCacheMapViewer.class));
-        linearLayout.addView(createButton(LabelLayerUsingMapDataStoreMapViewer.class));
         linearLayout.addView(createButton(ClusterMapActivity.class));
         linearLayout.addView(createButton(GroupMarkerExample.class));
     }
@@ -175,20 +176,18 @@ public class Samples extends Activity {
     @SuppressWarnings("deprecation")
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        Intent intent;
-        switch (item.getItemId()) {
-            case R.id.menu_preferences:
-                intent = new Intent(this, Settings.class);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
-                } else {
-                    intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
-                }
-                startActivity(intent);
-                return true;
-            case R.id.menu_svgclear:
-                AndroidGraphicFactory.clearResourceFileCache();
-                break;
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_preferences) {
+            Intent intent = new Intent(this, Settings.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
+            } else {
+                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+            }
+            startActivity(intent);
+            return true;
+        } else if (itemId == R.id.menu_svgclear) {
+            AndroidGraphicFactory.clearResourceFileCache();
         }
         return false;
     }
@@ -223,7 +222,7 @@ public class Samples extends Activity {
                     startActivity(new Intent(Samples.this, clazz));
                 }
             } catch (ClassNotFoundException e) {
-                Log.e(SamplesApplication.TAG, e.getMessage(), e);
+                Log.e(SamplesApplication.TAG, e.toString(), e);
             }
         }
     }

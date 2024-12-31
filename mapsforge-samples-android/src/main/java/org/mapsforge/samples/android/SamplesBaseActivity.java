@@ -24,7 +24,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -33,7 +32,6 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
-
 import org.mapsforge.core.model.Dimension;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.MapPosition;
@@ -47,7 +45,7 @@ import org.mapsforge.map.layer.cache.TileCache;
 import org.mapsforge.map.layer.renderer.MapWorkerPool;
 import org.mapsforge.map.layer.renderer.TileRendererLayer;
 import org.mapsforge.map.model.DisplayModel;
-import org.mapsforge.map.model.IMapViewPosition;
+import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.reader.MapFile;
 import org.mapsforge.map.scalebar.ImperialUnitAdapter;
 import org.mapsforge.map.scalebar.MetricUnitAdapter;
@@ -58,6 +56,7 @@ import java.io.File;
 /**
  * Code common to most activities in the Samples app.
  */
+@SuppressWarnings("deprecation")
 public abstract class SamplesBaseActivity extends MapViewerTemplate implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     public static final String SETTING_SCALEBAR = "scalebar";
@@ -166,18 +165,17 @@ public abstract class SamplesBaseActivity extends MapViewerTemplate implements S
     protected void createSharedPreferences() {
         super.createSharedPreferences();
 
-        this.sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        this.sharedPreferences = android.preference.PreferenceManager.getDefaultSharedPreferences(this);
 
         // problem that the first call to getAll() returns nothing, apparently the
         // following two calls have to be made to read all the values correctly
         // http://stackoverflow.com/questions/9310479/how-to-iterate-through-all-keys-of-shared-preferences
         this.sharedPreferences.edit().clear();
-        PreferenceManager.setDefaultValues(this, R.xml.preferences, true);
+        android.preference.PreferenceManager.setDefaultValues(this, R.xml.preferences, true);
 
         this.sharedPreferences.registerOnSharedPreferenceChangeListener(this);
     }
 
-    @SuppressWarnings("deprecation")
     @SuppressLint("InflateParams")
     @Override
     protected Dialog onCreateDialog(int id) {
@@ -215,34 +213,29 @@ public abstract class SamplesBaseActivity extends MapViewerTemplate implements S
         return true;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        Intent intent;
-        switch (item.getItemId()) {
-            case R.id.menu_preferences:
-                intent = new Intent(this, Settings.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
-                if (renderThemeStyleMenu != null) {
-                    intent.putExtra(Settings.RENDERTHEME_MENU, renderThemeStyleMenu);
-                }
-                startActivity(intent);
-                return true;
-            case R.id.menu_position_enter_coordinates:
-                showDialog(DIALOG_ENTER_COORDINATES);
-                break;
-            case R.id.menu_svgclear:
-                AndroidGraphicFactory.clearResourceFileCache();
-                break;
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_preferences) {
+            Intent intent = new Intent(this, Settings.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+            if (renderThemeStyleMenu != null) {
+                intent.putExtra(Settings.RENDERTHEME_MENU, renderThemeStyleMenu);
+            }
+            startActivity(intent);
+            return true;
+        } else if (itemId == R.id.menu_position_enter_coordinates) {
+            showDialog(DIALOG_ENTER_COORDINATES);
+        } else if (itemId == R.id.menu_svgclear) {
+            AndroidGraphicFactory.clearResourceFileCache();
         }
         return false;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected void onPrepareDialog(int id, final Dialog dialog) {
         if (id == DIALOG_ENTER_COORDINATES) {
-            IMapViewPosition currentPosition = SamplesBaseActivity.this.mapView.getModel().mapViewPosition;
+            MapViewPosition currentPosition = SamplesBaseActivity.this.mapView.getModel().mapViewPosition;
             LatLong currentCenter = currentPosition.getCenter();
             EditText editText = (EditText) dialog.findViewById(R.id.latitude);
             editText.setText(Double.toString(currentCenter.latitude));
@@ -280,12 +273,12 @@ public abstract class SamplesBaseActivity extends MapViewerTemplate implements S
         if (SamplesApplication.SETTING_SCALE.equals(key)) {
             this.mapView.getModel().displayModel.setUserScaleFactor(DisplayModel.getDefaultUserScaleFactor());
             Log.d(SamplesApplication.TAG, "Tilesize now " + this.mapView.getModel().displayModel.getTileSize());
-            AndroidUtil.restartActivity(this);
+            recreate();
         }
         if (SamplesApplication.SETTING_PREFERRED_LANGUAGE.equals(key)) {
             String language = preferences.getString(SamplesApplication.SETTING_PREFERRED_LANGUAGE, null);
             Log.d(SamplesApplication.TAG, "Preferred language now " + language);
-            AndroidUtil.restartActivity(this);
+            recreate();
         }
         if (SamplesApplication.SETTING_TILECACHE_PERSISTENCE.equals(key)) {
             if (!preferences.getBoolean(SamplesApplication.SETTING_TILECACHE_PERSISTENCE, false)) {
@@ -294,10 +287,10 @@ public abstract class SamplesBaseActivity extends MapViewerTemplate implements S
                     tileCache.purge();
                 }
             }
-            AndroidUtil.restartActivity(this);
+            recreate();
         }
         if (SamplesApplication.SETTING_TEXTWIDTH.equals(key)) {
-            AndroidUtil.restartActivity(this);
+            recreate();
         }
         if (SETTING_SCALEBAR.equals(key)) {
             setMapScaleBar();
@@ -306,8 +299,8 @@ public abstract class SamplesBaseActivity extends MapViewerTemplate implements S
             MapWorkerPool.DEBUG_TIMING = preferences.getBoolean(SamplesApplication.SETTING_DEBUG_TIMING, false);
         }
         if (SamplesApplication.SETTING_RENDERING_THREADS.equals(key)) {
-            Parameters.NUMBER_OF_THREADS = preferences.getInt(SamplesApplication.SETTING_RENDERING_THREADS, 1);
-            AndroidUtil.restartActivity(this);
+            Parameters.NUMBER_OF_THREADS = preferences.getInt(SamplesApplication.SETTING_RENDERING_THREADS, Parameters.NUMBER_OF_THREADS);
+            recreate();
         }
         if (SamplesApplication.SETTING_WAYFILTERING_DISTANCE.equals(key) ||
                 SamplesApplication.SETTING_WAYFILTERING.equals(key)) {

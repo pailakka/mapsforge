@@ -22,11 +22,14 @@ import org.mapsforge.map.model.DisplayModel;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Logger;
 
 /**
  * A thread-safe {@link Layer} list which does not allow {@code null} elements.
  */
 public class Layers implements Iterable<Layer>, RandomAccess {
+
+    private static final Logger LOGGER = Logger.getLogger(Layers.class.getName());
 
     private static void checkIsNull(Collection<Layer> layers) {
         if (layers == null) {
@@ -147,7 +150,8 @@ public class Layers implements Iterable<Layer>, RandomAccess {
     public synchronized void add(Layer layer, int group, boolean redraw) {
         int index = this.groupList.indexOf(group);
         if (index < 0) {
-            throw new IllegalArgumentException("unknown layer group");
+            LOGGER.warning("unknown / adding layer group" + group);
+            addGroup(group);
         }
 
         index++;
@@ -261,7 +265,8 @@ public class Layers implements Iterable<Layer>, RandomAccess {
     public synchronized boolean addAll(Collection<Layer> layers, int group, boolean redraw) {
         int index = this.groupList.indexOf(group);
         if (index < 0) {
-            throw new IllegalArgumentException("unknown layer group");
+            LOGGER.warning("unknown / adding layer group" + group);
+            addGroup(group);
         }
 
         index++;
@@ -286,7 +291,8 @@ public class Layers implements Iterable<Layer>, RandomAccess {
      */
     public synchronized void addGroup(int group) {
         if (this.groupList.contains(group)) {
-            throw new IllegalArgumentException("group added twice");
+            LOGGER.warning("group " + group + " already exists");
+            return;
         }
 
         this.groupList.add(group);
@@ -330,10 +336,31 @@ public class Layers implements Iterable<Layer>, RandomAccess {
     }
 
     /**
+     * @see List#contains(Object)
+     */
+    public synchronized boolean containsGroup(int group) {
+        return this.groupList.contains(group);
+    }
+
+    /**
      * @see List#get(int)
      */
     public synchronized Layer get(int index) {
         return this.layersList.get(index);
+    }
+
+    /**
+     * Get layer groups.
+     */
+    public synchronized List<Integer> getGroups() {
+        return this.groupList;
+    }
+
+    /**
+     * Not synchronized, read only.
+     */
+    public List<Layer> getLayers() {
+        return this.layersList;
     }
 
     /**

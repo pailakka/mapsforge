@@ -29,7 +29,7 @@ import org.mapsforge.map.layer.hills.HillsRenderConfig;
 import org.mapsforge.map.layer.labels.LabelStore;
 import org.mapsforge.map.layer.labels.TileBasedLabelStore;
 import org.mapsforge.map.model.DisplayModel;
-import org.mapsforge.map.model.IMapViewPosition;
+import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.model.common.Observer;
 import org.mapsforge.map.rendertheme.XmlRenderTheme;
 import org.mapsforge.map.rendertheme.rule.RenderThemeFuture;
@@ -55,7 +55,7 @@ public class TileRendererLayer extends TileLayer<RendererJob> implements Observe
      * @param mapViewPosition the mapViewPosition to know which tiles to render
      * @param graphicFactory  the graphicFactory to carry out platform specific operations
      */
-    public TileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, IMapViewPosition mapViewPosition,
+    public TileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, MapViewPosition mapViewPosition,
                              GraphicFactory graphicFactory) {
         this(tileCache, mapDataStore, mapViewPosition, false, true, false, graphicFactory);
     }
@@ -71,7 +71,7 @@ public class TileRendererLayer extends TileLayer<RendererJob> implements Observe
      * @param cacheLabels     true if labels should be cached in a LabelStore
      * @param graphicFactory  the graphicFactory to carry out platform specific operations
      */
-    public TileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, IMapViewPosition mapViewPosition,
+    public TileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, MapViewPosition mapViewPosition,
                              boolean isTransparent, boolean renderLabels, boolean cacheLabels,
                              GraphicFactory graphicFactory) {
         this(tileCache, mapDataStore, mapViewPosition, isTransparent, renderLabels, cacheLabels, graphicFactory, null);
@@ -89,7 +89,7 @@ public class TileRendererLayer extends TileLayer<RendererJob> implements Observe
      * @param graphicFactory    the graphicFactory to carry out platform specific operations
      * @param hillsRenderConfig the hillshading setup to be used (can be null)
      */
-    public TileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, IMapViewPosition mapViewPosition,
+    public TileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, MapViewPosition mapViewPosition,
                              boolean isTransparent, boolean renderLabels, boolean cacheLabels,
                              GraphicFactory graphicFactory, HillsRenderConfig hillsRenderConfig) {
         super(tileCache, mapViewPosition, graphicFactory.createMatrix(), isTransparent);
@@ -175,8 +175,8 @@ public class TileRendererLayer extends TileLayer<RendererJob> implements Observe
     /**
      * Whether the tile is stale and should be refreshed.
      * <p/>
-     * This method is called from {@link #draw(org.mapsforge.core.model.BoundingBox, byte, org.mapsforge.core.graphics.Canvas, org.mapsforge.core.model.Point)} to determine whether the tile needs to
-     * be refreshed.
+     * This method is called from {@link #draw(org.mapsforge.core.model.BoundingBox, byte, org.mapsforge.core.graphics.Canvas, org.mapsforge.core.model.Point, org.mapsforge.core.model.Rotation)}
+     * to determine whether the tile needs to be refreshed.
      * <p/>
      * A tile is considered stale if the timestamp of the layer's {@link #mapDataStore} is more recent than the
      * {@code bitmap}'s {@link org.mapsforge.core.graphics.TileBitmap#getTimestamp()}.
@@ -215,7 +215,8 @@ public class TileRendererLayer extends TileLayer<RendererJob> implements Observe
 
     @Override
     protected void retrieveLabelsOnly(RendererJob job) {
-        if (this.hasJobQueue && this.tileBasedLabelStore != null && this.tileBasedLabelStore.requiresTile(job.tile)) {
+        if (this.hasJobQueue && this.tileBasedLabelStore != null && this.tileBasedLabelStore.requiresTile(job.tile)
+                && this.mapDataStore.supportsTile(job.tile)) {
             job.setRetrieveLabelsOnly();
             this.jobQueue.add(job);
         }

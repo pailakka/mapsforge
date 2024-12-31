@@ -3,6 +3,7 @@
  * Copyright 2015 Ludwig M Brinckmann
  * Copyright 2016 devemux86
  * Copyright 2017 usrusr
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -17,10 +18,13 @@
  */
 package org.mapsforge.map.rendertheme.rule;
 
+import org.mapsforge.core.model.Tag;
 import org.mapsforge.core.util.LRUCache;
+import org.mapsforge.core.util.Utils;
 import org.mapsforge.map.datastore.PointOfInterest;
+import org.mapsforge.map.layer.hills.HillsRenderConfig;
 import org.mapsforge.map.layer.renderer.PolylineContainer;
-import org.mapsforge.map.layer.renderer.StandardRenderer;
+import org.mapsforge.map.model.DisplayModel;
 import org.mapsforge.map.rendertheme.RenderCallback;
 import org.mapsforge.map.rendertheme.RenderContext;
 import org.mapsforge.map.rendertheme.renderinstruction.Hillshading;
@@ -35,18 +39,21 @@ import java.util.Map;
  * A RenderTheme defines how ways and nodes are drawn.
  */
 public class RenderTheme {
-    private static final int MATCHING_CACHE_SIZE = 1024;
+
+    private static final int MATCHING_CACHE_SIZE = 8192;
 
     private final float baseStrokeWidth;
     private final float baseTextSize;
     private final boolean hasBackgroundOutside;
-    private int levels;
+    private volatile int levels;
     private final int mapBackground;
     private final int mapBackgroundOutside;
-    private final LRUCache<MatchingCacheKey, List<RenderInstruction>> wayMatchingCache;
-    private final LRUCache<MatchingCacheKey, List<RenderInstruction>> poiMatchingCache;
+    private final LRUCache<Integer, RenderInstruction[]> wayMatchingCache;
+    private final LRUCache<Integer, RenderInstruction[]> poiMatchingCache;
+
+    // Note: rulesList and hillShadings are not synchronized because it seems they are not being updated once the theme is loaded.
     private final ArrayList<Rule> rulesList; // NOPMD we need specific interface
-    private ArrayList<Hillshading> hillShadings = new ArrayList<>(); // NOPMD specific interface for trimToSize
+    private final ArrayList<Hillshading> hillShadings = new ArrayList<>(); // NOPMD specific interface for trimToSize
 
     private final Map<Byte, Float> strokeScales = new HashMap<>();
     private final Map<Byte, Float> textScales = new HashMap<>();
@@ -66,8 +73,14 @@ public class RenderTheme {
      * Must be called when this RenderTheme gets destroyed to clean up and free resources.
      */
     public void destroy() {
-        this.poiMatchingCache.clear();
-        this.wayMatchingCache.clear();
+        synchronized (this.poiMatchingCache) {
+            this.poiMatchingCache.clear();
+        }
+
+        synchronized (this.wayMatchingCache) {
+            this.wayMatchingCache.clear();
+        }
+
         for (Rule r : this.rulesList) {
             r.destroy();
         }
@@ -78,6 +91,10 @@ public class RenderTheme {
      */
     public int getLevels() {
         return this.levels;
+    }
+
+    void setLevels(int levels) {
+        this.levels = levels;
     }
 
     /**
@@ -130,25 +147,33 @@ public class RenderTheme {
      * @param renderContext
      * @param poi            the point of interest.
      */
-    public synchronized void matchNode(RenderCallback renderCallback, final RenderContext renderContext, PointOfInterest poi) {
-        MatchingCacheKey matchingCacheKey = new MatchingCacheKey(poi.tags, renderContext.rendererJob.tile.zoomLevel, Closed.NO);
+    public void matchNode(RenderCallback renderCallback, final RenderContext renderContext, PointOfInterest poi) {
+        // check cached instructions
+        int matchingCacheKey = computeMatchingCacheKey(poi.tags, renderContext.rendererJob.tile.zoomLevel, Closed.NO);
 
-        List<RenderInstruction> matchingList = this.poiMatchingCache.get(matchingCacheKey);
-        if (matchingList != null) {
-            // cache hit
-            for (int i = 0, n = matchingList.size(); i < n; ++i) {
-                matchingList.get(i).renderNode(renderCallback, renderContext, poi);
+        final RenderInstruction[] instructions;
+        synchronized (this.poiMatchingCache) {
+            instructions = this.poiMatchingCache.get(matchingCacheKey);
+        }
+        if (instructions != null) {
+            //noinspection ForLoopReplaceableByForEach
+            for (int i = 0; i < instructions.length; ++i) {
+                instructions[i].renderNode(renderCallback, renderContext, poi);
             }
             return;
         }
 
         // cache miss
-        matchingList = new ArrayList<RenderInstruction>();
-
-        for (int i = 0, n = this.rulesList.size(); i < n; ++i) {
-            this.rulesList.get(i).matchNode(renderCallback, renderContext, matchingList, poi);
+        List<RenderInstruction> matchingList = new ArrayList<>();
+        for (int i = 0, n = rulesList.size(); i < n; i++) {
+            rulesList.get(i).matchNode(renderCallback, renderContext, matchingList, poi);
         }
-        this.poiMatchingCache.put(matchingCacheKey, matchingList);
+        RenderInstruction[] matchingListA = new RenderInstruction[matchingList.size()];
+        matchingList.toArray(matchingListA);
+
+        synchronized (this.poiMatchingCache) {
+            this.poiMatchingCache.put(matchingCacheKey, matchingListA);
+        }
     }
 
     /**
@@ -157,15 +182,17 @@ public class RenderTheme {
      * @param scaleFactor the factor by which the stroke width should be scaled.
      * @param zoomLevel   the zoom level to which this is applied.
      */
-    public synchronized void scaleStrokeWidth(float scaleFactor, byte zoomLevel) {
-        if (!strokeScales.containsKey(zoomLevel) || scaleFactor != strokeScales.get(zoomLevel)) {
-            for (int i = 0, n = this.rulesList.size(); i < n; ++i) {
-                Rule rule = this.rulesList.get(i);
-                if (rule.zoomMin <= zoomLevel && rule.zoomMax >= zoomLevel) {
-                    rule.scaleStrokeWidth(scaleFactor * this.baseStrokeWidth, zoomLevel);
+    public void scaleStrokeWidth(float scaleFactor, byte zoomLevel) {
+        synchronized (this.strokeScales) {
+            if (!strokeScales.containsKey(zoomLevel) || scaleFactor != strokeScales.get(zoomLevel)) {
+                for (int i = 0, n = this.rulesList.size(); i < n; ++i) {
+                    Rule rule = this.rulesList.get(i);
+                    if (rule.zoomMin <= zoomLevel && rule.zoomMax >= zoomLevel) {
+                        rule.scaleStrokeWidth(scaleFactor * this.baseStrokeWidth * DisplayModel.lineScale, zoomLevel);
+                    }
                 }
+                strokeScales.put(zoomLevel, scaleFactor);
             }
-            strokeScales.put(zoomLevel, scaleFactor);
         }
     }
 
@@ -175,15 +202,17 @@ public class RenderTheme {
      * @param scaleFactor the factor by which the text size should be scaled.
      * @param zoomLevel   the zoom level to which this is applied.
      */
-    public synchronized void scaleTextSize(float scaleFactor, byte zoomLevel) {
-        if (!textScales.containsKey(zoomLevel) || scaleFactor != textScales.get(zoomLevel)) {
-            for (int i = 0, n = this.rulesList.size(); i < n; ++i) {
-                Rule rule = this.rulesList.get(i);
-                if (rule.zoomMin <= zoomLevel && rule.zoomMax >= zoomLevel) {
-                    rule.scaleTextSize(scaleFactor * this.baseTextSize, zoomLevel);
+    public void scaleTextSize(float scaleFactor, byte zoomLevel) {
+        synchronized (this.textScales) {
+            if (!textScales.containsKey(zoomLevel) || scaleFactor != textScales.get(zoomLevel)) {
+                for (int i = 0, n = this.rulesList.size(); i < n; ++i) {
+                    Rule rule = this.rulesList.get(i);
+                    if (rule.zoomMin <= zoomLevel && rule.zoomMax >= zoomLevel) {
+                        rule.scaleTextSize(scaleFactor * this.baseTextSize * DisplayModel.textScale, zoomLevel);
+                    }
                 }
+                textScales.put(zoomLevel, scaleFactor);
             }
-            textScales.put(zoomLevel, scaleFactor);
         }
     }
 
@@ -203,29 +232,33 @@ public class RenderTheme {
         }
     }
 
-    void setLevels(int levels) {
-        this.levels = levels;
-    }
+    private void matchWay(RenderCallback renderCallback, final RenderContext renderContext, Closed closed, PolylineContainer way) {
+        // check cached instructions
+        int matchingCacheKey = computeMatchingCacheKey(way.getTags(), way.getUpperLeft().zoomLevel, closed);
 
-    private synchronized void matchWay(RenderCallback renderCallback, final RenderContext renderContext, Closed closed, PolylineContainer way) {
-        MatchingCacheKey matchingCacheKey = new MatchingCacheKey(way.getTags(), way.getUpperLeft().zoomLevel, closed);
-
-        List<RenderInstruction> matchingList = this.wayMatchingCache.get(matchingCacheKey);
-        if (matchingList != null) {
-            // cache hit
-            for (int i = 0, n = matchingList.size(); i < n; ++i) {
-                matchingList.get(i).renderWay(renderCallback, renderContext, way);
+        final RenderInstruction[] instructions;
+        synchronized (this.wayMatchingCache) {
+            instructions = this.wayMatchingCache.get(matchingCacheKey);
+        }
+        if (instructions != null) {
+            //noinspection ForLoopReplaceableByForEach
+            for (int i = 0; i < instructions.length; ++i) {
+                instructions[i].renderWay(renderCallback, renderContext, way);
             }
             return;
         }
 
         // cache miss
-        matchingList = new ArrayList<RenderInstruction>();
-        for (int i = 0, n = this.rulesList.size(); i < n; ++i) {
-            this.rulesList.get(i).matchWay(renderCallback, way, way.getUpperLeft(), closed, matchingList, renderContext);
+        List<RenderInstruction> matchingList = new ArrayList<>();
+        for (int i = 0, n = rulesList.size(); i < n; i++) {
+            rulesList.get(i).matchWay(renderCallback, way, way.getUpperLeft(), closed, matchingList, renderContext);
         }
+        RenderInstruction[] matchingListA = new RenderInstruction[matchingList.size()];
+        matchingList.toArray(matchingListA);
 
-        this.wayMatchingCache.put(matchingCacheKey, matchingList);
+        synchronized (this.wayMatchingCache) {
+            this.wayMatchingCache.put(matchingCacheKey, matchingListA);
+        }
     }
 
     public void traverseRules(Rule.RuleVisitor visitor) {
@@ -234,8 +267,28 @@ public class RenderTheme {
         }
     }
 
-    public void matchHillShadings(StandardRenderer renderer, RenderContext renderContext) {
+    public void matchHillShadings(RenderContext renderContext, HillsRenderConfig hillsRenderConfig) {
         for (Hillshading hillShading : hillShadings)
-            hillShading.render(renderContext, renderer.hillsRenderConfig);
+            hillShading.render(renderContext, hillsRenderConfig);
+    }
+
+    private static final int keyCodeName = Utils.hashTagParameter("name");
+
+    /**
+     * Compute key for matching cached set of instructions.
+     */
+    private Integer computeMatchingCacheKey(List<Tag> tags, byte zoomLevel, Closed closed) {
+        int result = 1;
+        result = 31 * result + ((closed == null) ? 0 : closed.hashCode());
+        if (tags != null) {
+            for (int i = 0, n = tags.size(); i < n; i++) {
+                Tag tag = tags.get(i);
+                if (keyCodeName != tag.keyCode) {
+                    result = 31 * result + tag.hashCode();
+                }
+            }
+        }
+        result = 31 * result + zoomLevel;
+        return result;
     }
 }

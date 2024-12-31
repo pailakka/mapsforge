@@ -16,18 +16,13 @@
  */
 package org.mapsforge.map.rendertheme.renderinstruction;
 
-import org.mapsforge.core.graphics.Bitmap;
-import org.mapsforge.core.graphics.Cap;
-import org.mapsforge.core.graphics.Color;
-import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.graphics.Join;
-import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.Style;
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.map.datastore.PointOfInterest;
 import org.mapsforge.map.layer.renderer.PolylineContainer;
 import org.mapsforge.map.model.DisplayModel;
 import org.mapsforge.map.rendertheme.RenderCallback;
 import org.mapsforge.map.rendertheme.RenderContext;
+import org.mapsforge.map.rendertheme.XmlThemeResourceProvider;
 import org.mapsforge.map.rendertheme.XmlUtils;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -48,6 +43,7 @@ public class Line extends RenderInstruction {
     private final Map<Byte, Float> dyScaled;
     private final int level;
     private final String relativePathPrefix;
+    private final XmlThemeResourceProvider resourceProvider;
     private Scale scale = Scale.STROKE;
     private Bitmap shaderBitmap;
     private String src;
@@ -55,12 +51,16 @@ public class Line extends RenderInstruction {
     private float[] strokeDasharray;
     private final Map<Byte, Paint> strokes;
     private float strokeWidth;
+    private Curve curve;
+
+    private final Object mySync = new Object();
 
     public Line(GraphicFactory graphicFactory, DisplayModel displayModel, String elementName,
-                XmlPullParser pullParser, int level, String relativePathPrefix) throws IOException, XmlPullParserException {
+                XmlPullParser pullParser, int level, String relativePathPrefix, XmlThemeResourceProvider resourceProvider) throws IOException, XmlPullParserException {
         super(graphicFactory, displayModel);
         this.level = level;
         this.relativePathPrefix = relativePathPrefix;
+        this.resourceProvider = resourceProvider;
 
         this.stroke = graphicFactory.createPaint();
         this.stroke.setColor(Color.BLACK);
@@ -69,6 +69,7 @@ public class Line extends RenderInstruction {
         this.stroke.setStrokeJoin(Join.ROUND);
         this.strokes = new HashMap<>();
         this.dyScaled = new HashMap<>();
+        this.curve = Curve.NO;
 
         extractValues(graphicFactory, displayModel, elementName, pullParser);
     }
@@ -88,6 +89,8 @@ public class Line extends RenderInstruction {
                 this.src = value;
             } else if (CAT.equals(name)) {
                 this.category = value;
+            } else if (CURVE.equals(name)) {
+                curve = Curve.fromString(value);
             } else if (DY.equals(name)) {
                 this.dy = Float.parseFloat(value) * displayModel.getScaleFactor();
             } else if (SCALE.equals(name)) {
@@ -115,7 +118,7 @@ public class Line extends RenderInstruction {
             } else if (SYMBOL_WIDTH.equals(name)) {
                 this.width = XmlUtils.parseNonNegativeInteger(name, value) * displayModel.getScaleFactor();
             } else {
-                throw XmlUtils.createXmlPullParserException(elementName, name, value, i);
+                XmlUtils.logUnknownAttribute(elementName, name, value, i);
             }
         }
     }
@@ -144,48 +147,52 @@ public class Line extends RenderInstruction {
 
     @Override
     public synchronized void renderWay(RenderCallback renderCallback, final RenderContext renderContext, PolylineContainer way) {
-        if (!bitmapCreated) {
-            try {
-                shaderBitmap = createBitmap(relativePathPrefix, src);
-            } catch (IOException ioException) {
-                // no-op
+        synchronized (mySync) {
+            if (!bitmapCreated) {
+                try {
+                    shaderBitmap = createBitmap(relativePathPrefix, src, resourceProvider);
+                } catch (IOException ioException) {
+                    // no-op
+                }
+                bitmapCreated = true;
             }
-            bitmapCreated = true;
-        }
 
-        Paint strokePaint = getStrokePaint(renderContext.rendererJob.tile.zoomLevel);
+            Paint strokePaint = getStrokePaint(renderContext.rendererJob.tile.zoomLevel);
 
-        if (shaderBitmap != null) {
-            strokePaint.setBitmapShader(shaderBitmap);
-            strokePaint.setBitmapShaderShift(way.getUpperLeft().getOrigin());
-        }
+            if (shaderBitmap != null) {
+                strokePaint.setBitmapShader(shaderBitmap);
+                strokePaint.setBitmapShaderShift(way.getUpperLeft().getOrigin());
+            }
 
-        Float dyScale = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
-        if (dyScale == null) {
-            dyScale = this.dy;
+            Float dyScale = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
+            if (dyScale == null) {
+                dyScale = this.dy;
+            }
+            renderCallback.renderWay(renderContext, strokePaint, dyScale, curve, this.level, way);
         }
-        renderCallback.renderWay(renderContext, strokePaint, dyScale, this.level, way);
     }
 
     @Override
     public void scaleStrokeWidth(float scaleFactor, byte zoomLevel) {
-        if (this.scale == Scale.NONE) {
-            scaleFactor = 1;
-        }
-        if (this.stroke != null) {
-            Paint paint = graphicFactory.createPaint(stroke);
-            paint.setStrokeWidth(this.strokeWidth * scaleFactor);
-            if (this.scale == Scale.ALL) {
-                float[] strokeDasharrayScaled = new float[this.strokeDasharray.length];
-                for (int i = 0; i < strokeDasharray.length; i++) {
-                    strokeDasharrayScaled[i] = this.strokeDasharray[i] * scaleFactor;
-                }
-                paint.setDashPathEffect(strokeDasharrayScaled);
+        synchronized (mySync) {
+            if (this.scale == Scale.NONE) {
+                scaleFactor = 1;
             }
-            strokes.put(zoomLevel, paint);
-        }
+            if (this.stroke != null) {
+                Paint paint = graphicFactory.createPaint(stroke);
+                paint.setStrokeWidth(this.strokeWidth * scaleFactor);
+                if (this.scale == Scale.ALL) {
+                    float[] strokeDasharrayScaled = new float[this.strokeDasharray.length];
+                    for (int i = 0; i < strokeDasharray.length; i++) {
+                        strokeDasharrayScaled[i] = this.strokeDasharray[i] * scaleFactor;
+                    }
+                    paint.setDashPathEffect(strokeDasharrayScaled);
+                }
+                strokes.put(zoomLevel, paint);
+            }
 
-        this.dyScaled.put(zoomLevel, this.dy * scaleFactor);
+            this.dyScaled.put(zoomLevel, this.dy * scaleFactor);
+        }
     }
 
     @Override

@@ -2,15 +2,13 @@
 
 This article describes how to use the POI API in mapsforge POI library (from `prototypes` branch).
 
-If you have any questions or problems, don't hesitate to ask our public [forum](https://groups.google.com/group/mapsforge-dev) for help.
-
 ## Introduction
 
 _Points of Interest_ (POIs) are points with a given position, category and data. A POI database is used to store a set of POIs and to search for POIs within a given area.
 
-The mapsforge POI library uses SQLite for storing POIs. For efficiency reasons Android's SQLite implementation is not used. Instead [SQLite Android Bindings](https://sqlite.org/android/) is used to provide an SQLite implementation with [R-tree](https://sqlite.org/rtree.html) functionality.
+The mapsforge POI library uses SQLite for storing POIs.
 
-All reading and writing operations are done via classes implementing the `PoiPersistenceManager` interface. This allows adding, removing and changing POIs at any time. POI categories can be defined on creation time only. Categories are implemented as trees and can be accessed via classes implementing the `PoiCategoryManager` interface.
+All reading and writing operations are done via classes implementing the `PoiPersistenceManager` interface. POI categories can be defined on creation time only. Categories are implemented as trees and can be accessed via classes implementing the `PoiCategoryManager` interface.
 
 Externally you can use your favorite SQLite manager for browsing the database, e.g. [spatialite-gui](https://www.gaia-gis.it/fossil/spatialite_gui/index).
 
@@ -22,7 +20,7 @@ This section provides you with information how to create a POI database, how to 
 
 The tool is implemented as a plugin to the [Osmosis](http://wiki.openstreetmap.org/wiki/Osmosis) software. To use the tool, you are required to have a working installation of Osmosis and the writer plugin copied to the plugins directory of Osmosis. You should also be familiar with the Osmosis tool.
 
-Download the release or snapshot writer plugin (**jar-with-dependencies**) from [Maven Central](https://search.maven.org/search?q=g:org.mapsforge) or [Sonatype OSS Repository Hosting](https://oss.sonatype.org/content/repositories/snapshots/org/mapsforge/) and read the Osmosis [documentation](http://wiki.openstreetmap.org/wiki/Osmosis/Detailed_Usage#Plugin_Tasks) for how to install a plugin.
+Download from [Releases](https://github.com/mapsforge/mapsforge/releases) or build the snapshot writer plugin (**jar-with-dependencies**) and read the Osmosis [documentation](http://wiki.openstreetmap.org/wiki/Osmosis/Detailed_Usage#Plugin_Tasks) for how to install a plugin.
 
 To convert OSM data to a POI database execute the following command:
 
@@ -48,9 +46,10 @@ The `--poi-writer`, or short `--pw` task indicates that the POI writer plugin sh
 |**Option**|**Description**|**Valid values**|**Default value**|
 |----------|---------------|----------------|-----------------|
 |`tag-conf-file`|Path to an XML configuration file that contains mappings from OSM tags to category names and a hierarchy of those categories.|path to an XML file|(blank) internal default poi mapping is used|
-|`names`|Add only named entities.|true/false|true|
+|`names`|Add only named entities.|true/false|false|
 |`ways`|Also parse ways.|true/false|true|
-|`normalize`|Add normalized_name (for accent insensitive search). *Works if all-tags is true.*|true/false|false|
+|`way-filtering`| Filter ways with tagged nodes (better DB performance).|true/false|true|
+|`normalize`|Add normalized_name (for accent insensitive search). *Works if all-tags is true.*|true/false|true|
 |`geo-tags`|Add geo tags.|true/false|false|
 |`filter-categories`|Drop empty categories.|true/false|true|
 
@@ -92,12 +91,13 @@ The DB schema consists of:
 - `poi_categories` with the categories tree
 - `poi_data` with the POI information
 - `poi_category_map` with the POI categories mapping
-- Virtual & shadow correlated tables holding the R-tree index
+- `poi_index` with the POI coordinates
 - `metadata` with the DB metadata
 
 ## Version history
 
-|**Version**|**Date**|**Changes**|
-|-----------|--------|-----------|
-|1|2016-06-11|Initial release of the specification|
-|2|2017-12-03|<ul><li>POI multiple categories</li></ul>|
+| **Version** | **Date**   | **Changes**                                     |
+|-------------|------------|-------------------------------------------------|
+| 1           | 2016-06-11 | Initial release of the specification            |
+| 2           | 2017-12-03 | <ul><li>POI multiple categories</li></ul>       |
+| 3           | 2023-01-12 | <ul><li>Android without external libs</li></ul> |

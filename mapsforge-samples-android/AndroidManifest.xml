@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.mapsforge.samples.android"
     android:installLocation="auto"
     android:versionCode="1"
     android:versionName="1.0">
 
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Write permission needed only for DownloadManager -->
@@ -18,10 +18,12 @@
         android:icon="@mipmap/ic_launcher"
         android:label="Mapsforge Samples"
         android:requestLegacyExternalStorage="true"
+        android:theme="@style/AppThemeLight"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".Samples"
-            android:configChanges="keyboardHidden|orientation|screenSize">
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -100,6 +102,9 @@
             android:name=".LongPressAction"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
+            android:name=".MapsforgeMapViewer"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+        <activity
             android:name=".MultiLingualMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
@@ -115,7 +120,7 @@
             android:name=".ReverseGeocodeViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
-            android:name=".RotateMapViewer"
+            android:name=".RotationMapViewer"
             android:configChanges="keyboardHidden|orientation|screenSize" />
         <activity
             android:name=".SimplestMapViewer"

@@ -4,9 +4,8 @@
 - [BBBike](https://extract.bbbike.org/?format=mapsforge-osm.zip)
 - [Freizeitkarte](https://www.freizeitkarte-osm.de/android/en/index.html)
 - [Kurviger](https://download.kurviger.de/)
-- [Mapsforge](https://download.mapsforge.org/)
+- [Mapsforge](https://download.mapsforge.org/) | [Mirror (fast)](http://ftp-stud.hs-esslingen.de/pub/Mirrors/download.mapsforge.org/)
 - [OpenAndroMaps](https://www.openandromaps.org/en/)
-- [OpenMaps](https://openmaps.eu/)
+- [OpenHiking](https://www.openhiking.eu/en/)
+- [paws.cz](https://osm.paws.cz/)
 - [vector.city](https://vector.city/)
-
-You know a Mapsforge map provider that is missing here? Please inform us by sending a message via our public [forum](https://groups.google.com/group/mapsforge-dev).

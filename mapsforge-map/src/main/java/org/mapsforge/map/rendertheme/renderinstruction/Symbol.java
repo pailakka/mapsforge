@@ -1,7 +1,7 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014-2015 Ludwig M Brinckmann
- * Copyright 2016 devemux86
+ * Copyright 2016-2020 devemux86
  * Copyright 2020 Adrian Batzill
  *
  * This program is free software: you can redistribute it and/or modify it under the
@@ -27,6 +27,7 @@ import org.mapsforge.map.layer.renderer.PolylineContainer;
 import org.mapsforge.map.model.DisplayModel;
 import org.mapsforge.map.rendertheme.RenderCallback;
 import org.mapsforge.map.rendertheme.RenderContext;
+import org.mapsforge.map.rendertheme.XmlThemeResourceProvider;
 import org.mapsforge.map.rendertheme.XmlUtils;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -45,24 +46,34 @@ public class Symbol extends RenderInstruction {
     private Position position;
     private int priority;
     private final String relativePathPrefix;
+    private final XmlThemeResourceProvider resourceProvider;
     private String src;
 
+    private final Object mySync = new Object();
+
     public Symbol(GraphicFactory graphicFactory, DisplayModel displayModel, String elementName,
-                  XmlPullParser pullParser, String relativePathPrefix) throws IOException, XmlPullParserException {
+                  XmlPullParser pullParser, String relativePathPrefix, XmlThemeResourceProvider resourceProvider) throws IOException, XmlPullParserException {
         super(graphicFactory, displayModel);
         this.relativePathPrefix = relativePathPrefix;
+        this.resourceProvider = resourceProvider;
         this.display = Display.IFSPACE;
         this.position = Position.CENTER;
         extractValues(elementName, pullParser);
 
         Bitmap bitmap = getBitmap();
-        this.boundary = computeBoundary(bitmap.getWidth(), bitmap.getHeight(), this.position);
+        if (bitmap != null) {
+            this.boundary = computeBoundary(bitmap.getWidth(), bitmap.getHeight(), this.position);
+        } else {
+            this.boundary = null;
+        }
     }
 
     @Override
     public void destroy() {
-        if (this.bitmap != null) {
-            this.bitmap.decrementRefCount();
+        synchronized (mySync) {
+            if (this.bitmap != null) {
+                this.bitmap.decrementRefCount();
+            }
         }
     }
 
@@ -92,20 +103,22 @@ public class Symbol extends RenderInstruction {
             } else if (POSITION.equals(name)) {
                 this.position = Position.fromString(value);
             } else {
-                throw XmlUtils.createXmlPullParserException(elementName, name, value, i);
+                XmlUtils.logUnknownAttribute(elementName, name, value, i);
             }
         }
     }
 
     public Bitmap getBitmap() {
-        if (this.bitmap == null && !bitmapInvalid) {
-            try {
-                this.bitmap = createBitmap(relativePathPrefix, src);
-            } catch (IOException ioException) {
-                this.bitmapInvalid = true;
+        synchronized (mySync) {
+            if (this.bitmap == null && !bitmapInvalid) {
+                try {
+                    this.bitmap = createBitmap(relativePathPrefix, src, resourceProvider);
+                } catch (IOException ioException) {
+                    this.bitmapInvalid = true;
+                }
             }
+            return this.bitmap;
         }
-        return this.bitmap;
     }
 
     public Rectangle getBoundary() {
@@ -122,8 +135,10 @@ public class Symbol extends RenderInstruction {
             return;
         }
 
-        if (getBitmap() != null) {
-            renderCallback.renderPointOfInterestSymbol(renderContext, this.display, this.priority, this.boundary, this.bitmap, poi);
+        synchronized (mySync) {
+            if (getBitmap() != null) {
+                renderCallback.renderPointOfInterestSymbol(renderContext, this.display, this.priority, this.boundary, this.bitmap, poi);
+            }
         }
     }
 
@@ -133,8 +148,10 @@ public class Symbol extends RenderInstruction {
             return;
         }
 
-        if (this.getBitmap() != null) {
-            renderCallback.renderAreaSymbol(renderContext, this.display, this.priority, this.bitmap, way);
+        synchronized (mySync) {
+            if (this.getBitmap() != null) {
+                renderCallback.renderAreaSymbol(renderContext, this.display, this.priority, this.bitmap, way);
+            }
         }
     }
 

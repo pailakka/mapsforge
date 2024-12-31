@@ -20,11 +20,9 @@ package org.mapsforge.map.layer;
 import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.model.BoundingBox;
-import org.mapsforge.core.model.Dimension;
-import org.mapsforge.core.model.MapPosition;
-import org.mapsforge.core.model.Point;
-import org.mapsforge.map.model.IMapViewPosition;
+import org.mapsforge.core.model.*;
+import org.mapsforge.core.util.Parameters;
+import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.util.MapPositionUtil;
 import org.mapsforge.map.util.PausableThread;
 import org.mapsforge.map.view.FrameBuffer;
@@ -36,11 +34,11 @@ public class LayerManager extends PausableThread implements Redrawer {
     private final Canvas drawingCanvas;
     private final Layers layers;
     private final MapView mapView;
-    private final IMapViewPosition mapViewPosition;
+    private final MapViewPosition mapViewPosition;
     private boolean redrawNeeded;
 
 
-    public LayerManager(MapView mapView, IMapViewPosition mapViewPosition, GraphicFactory graphicFactory) {
+    public LayerManager(MapView mapView, MapViewPosition mapViewPosition, GraphicFactory graphicFactory) {
         super();
 
         this.mapView = mapView;
@@ -84,16 +82,39 @@ public class LayerManager extends PausableThread implements Redrawer {
             this.drawingCanvas.setBitmap(bitmap);
 
             MapPosition mapPosition = this.mapViewPosition.getMapPosition();
-            Dimension canvasDimension = this.drawingCanvas.getDimension();
+            Rotation rotation = this.mapView.getMapRotation();
             int tileSize = this.mapView.getModel().displayModel.getTileSize();
-            BoundingBox boundingBox = MapPositionUtil.getBoundingBox(mapPosition, canvasDimension, tileSize);
+            Dimension canvasDimension = this.drawingCanvas.getDimension();
+            float mapViewCenterX = this.mapView.getMapViewCenterX();
+            float mapViewCenterY = this.mapView.getMapViewCenterY();
+            BoundingBox boundingBox = MapPositionUtil.getBoundingBox(mapPosition, rotation, tileSize, canvasDimension, mapViewCenterX, mapViewCenterY);
             Point topLeftPoint = MapPositionUtil.getTopLeftPoint(mapPosition, canvasDimension, tileSize);
 
+            float dx = this.mapView.getOffsetX();
+            float dy = this.mapView.getOffsetY();
+            float px = rotation.px + (canvasDimension.width - this.mapView.getWidth()) * 0.5f;
+            float py = rotation.py + (canvasDimension.height - this.mapView.getHeight()) * 0.5f;
+            if (!Parameters.ROTATION_MATRIX) {
+                if (dx != 0 || dy != 0) {
+                    this.drawingCanvas.translate(dx, dy);
+                }
+                if (!Rotation.noRotation(rotation)) {
+                    this.drawingCanvas.rotate(rotation.degrees, px, py);
+                }
+            }
             synchronized (this.layers) {
                 for (Layer layer : this.layers) {
                     if (layer.isVisible()) {
-                        layer.draw(boundingBox, mapPosition.zoomLevel, this.drawingCanvas, topLeftPoint);
+                        layer.draw(boundingBox, mapPosition.zoomLevel, this.drawingCanvas, topLeftPoint, rotation);
                     }
+                }
+            }
+            if (!Parameters.ROTATION_MATRIX) {
+                if (!Rotation.noRotation(rotation)) {
+                    this.drawingCanvas.rotate(-rotation.degrees, px, py);
+                }
+                if (dx != 0 || dy != 0) {
+                    this.drawingCanvas.translate(-dx, -dy);
                 }
             }
 

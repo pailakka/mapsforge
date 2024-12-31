@@ -18,12 +18,10 @@ package org.mapsforge.map.layer.overlay;
 
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.model.BoundingBox;
-import org.mapsforge.core.model.LatLong;
-import org.mapsforge.core.model.Point;
-import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.model.*;
 import org.mapsforge.core.util.MercatorProjection;
 import org.mapsforge.map.layer.Layer;
+import org.mapsforge.map.view.MapView;
 
 /**
  * A {@code Circle} consists of a center {@link LatLong} and a non-negative radius in meters.
@@ -69,15 +67,17 @@ public class Circle extends Layer {
         this.paintStroke = paintStroke;
     }
 
-    public synchronized boolean contains(Point center, Point point, double latitude, byte zoomLevel) {
+    public synchronized boolean contains(Point center, Point point, double latitude, MapView mapView) {
+        double scaleFactor = Math.pow(2, mapView.getModel().mapViewPosition.getZoom())
+                / Math.pow(2, mapView.getModel().mapViewPosition.getZoomLevel());
         // Touch min 20x20 px at baseline mdpi (160dpi)
-        double distance = Math.max(20 / 2 * this.displayModel.getScaleFactor(),
-                getRadiusInPixels(latitude, zoomLevel));
+        double distance = Math.max(20 * 0.5 * this.displayModel.getScaleFactor(),
+                getRadiusInPixels(latitude, mapView.getModel().mapViewPosition.getZoomLevel()) * scaleFactor);
         return center.distance(point) < distance;
     }
 
     @Override
-    public synchronized void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint) {
+    public synchronized void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint, Rotation rotation) {
         if (this.latLong == null || (this.paintStroke == null && this.paintFill == null)) {
             return;
         }

@@ -6,6 +6,7 @@
  * Copyright 2015-2017 devemux86
  * Copyright 2017 usrusr
  * Copyright 2018 Adrian Batzill
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -22,56 +23,34 @@ package org.mapsforge.map.awt.graphics;
 
 import com.kitfox.svg.SVGCache;
 
-import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Color;
-import org.mapsforge.core.graphics.Display;
-import org.mapsforge.core.graphics.GraphicContext;
-import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.graphics.Matrix;
 import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.Path;
-import org.mapsforge.core.graphics.Position;
-import org.mapsforge.core.graphics.ResourceBitmap;
-import org.mapsforge.core.graphics.TileBitmap;
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.mapelements.PointTextContainer;
 import org.mapsforge.core.mapelements.SymbolContainer;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.Point;
 
-import java.awt.Graphics;
-import java.awt.Graphics2D;
+import java.awt.*;
 import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
-import java.awt.image.DataBuffer;
-import java.awt.image.DataBufferByte;
-import java.awt.image.IndexColorModel;
-import java.awt.image.Raster;
-import java.awt.image.SampleModel;
-import java.awt.image.WritableRaster;
+import java.awt.image.*;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class AwtGraphicFactory implements GraphicFactory {
     public static final GraphicFactory INSTANCE = new AwtGraphicFactory();
-    private static final java.awt.Color TRANSPARENT = new java.awt.Color(0, 0, 0, 0);
+    public static final java.awt.Color TRANSPARENT = new java.awt.Color(0, 0, 0, 0);
 
-    private static final ColorModel monoColorModel;
+    protected ColorModel monoColorModel = null;
+    protected final AtomicInteger hillshadingColor = new AtomicInteger(Integer.MAX_VALUE);
 
-    static {
-        /**
-         * use an inverse lookup color model on the AWT side so that the android implementation can take the bytes without any twiddling
-         * (the only 8 bit bitmaps android knows are alpha masks, so we have to define our mono bitmap bytes in a way that are easy for android to understand)
-         **/
-        byte[] linear = new byte[256];
-        for (int i = 0; i < 256; i++) {
-            linear[i] = (byte) (255 - i);
-        }
-        monoColorModel = new IndexColorModel(8, 256, linear, linear, linear);
+    private AwtGraphicFactory() {
     }
 
-    public static GraphicContext createGraphicContext(Graphics graphics) {
+    public static Canvas createGraphicContext(Graphics graphics) {
         return new org.mapsforge.map.awt.graphics.AwtCanvas((Graphics2D) graphics);
     }
 
@@ -162,9 +141,35 @@ public class AwtGraphicFactory implements GraphicFactory {
     }
 
     @Override
-    public AwtHillshadingBitmap createMonoBitmap(int width, int height, byte[] buffer, int padding, BoundingBox area) {
-        DataBuffer dataBuffer = new DataBufferByte(buffer, buffer.length);
+    public AwtHillshadingBitmap createMonoBitmap(int width, int height, byte[] buffer, int padding, BoundingBox area, int color) {
+        if (color != hillshadingColor.getAndSet(color) || monoColorModel == null) {
+            synchronized (this.hillshadingColor) {
+                if (color != hillshadingColor.getAndSet(color) || monoColorModel == null) {
+                    final java.awt.Color awtColor = new java.awt.Color(color, true);
 
+                    final int alpha = awtColor.getAlpha();
+
+                    byte[] reds = new byte[256];
+                    byte[] greens = new byte[256];
+                    byte[] blues = new byte[256];
+                    byte[] alphas = new byte[256];
+
+                    Arrays.fill(reds, (byte) awtColor.getRed());
+                    Arrays.fill(greens, (byte) awtColor.getGreen());
+                    Arrays.fill(blues, (byte) awtColor.getBlue());
+
+                    // use a lookup color model on the AWT side so that the android implementation can take the bytes without any twiddling
+                    // (the only 8 bit bitmaps android knows are alpha masks, so we have to define our mono bitmap bytes in a way that are easy for android to understand)
+                    for (int i = 0; i < 256; i++) {
+                        alphas[i] = (byte) (i * alpha / 255);
+                    }
+
+                    monoColorModel = new IndexColorModel(8, 256, reds, greens, blues, alphas);
+                }
+            }
+        }
+
+        DataBuffer dataBuffer = new DataBufferByte(buffer, buffer.length);
         SampleModel singleByteSampleModel = monoColorModel.createCompatibleSampleModel(width + 2 * padding, height + 2 * padding);
         WritableRaster writableRaster = Raster.createWritableRaster(singleByteSampleModel, dataBuffer, null);
         BufferedImage bufferedImage = new BufferedImage(monoColorModel, writableRaster, false, null);
@@ -189,9 +194,11 @@ public class AwtGraphicFactory implements GraphicFactory {
     }
 
     @Override
-    public PointTextContainer createPointTextContainer(Point xy, Display display, int priority, String text, Paint paintFront, Paint paintBack,
+    public PointTextContainer createPointTextContainer(Point xy, double horizontalOffset, double verticalOffset,
+                                                       Display display, int priority, String text, Paint paintFront, Paint paintBack,
                                                        SymbolContainer symbolContainer, Position position, int maxTextWidth) {
-        return new AwtPointTextContainer(xy, display, priority, text, paintFront, paintBack, symbolContainer, position, maxTextWidth);
+        return new AwtPointTextContainer(xy, horizontalOffset, verticalOffset, display,
+                priority, text, paintFront, paintBack, symbolContainer, position, maxTextWidth);
     }
 
     @Override

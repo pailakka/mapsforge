@@ -16,8 +16,8 @@
 | [Bladenight App](https://play.google.com/store/apps/details?id=fr.ocroquette.bladenight) | Tracking for inline skating events | Proprietary/Free | Closed |
 | [Calimoto](https://play.google.com/store/apps/details?id=com.calimoto.calimoto) | Motorrad navigation | Proprietary/Free (in-app purchases) | Closed |
 | [Cartograph 2 Maps](https://www.cartograph.eu/) | Map viewer and tracking | Proprietary/Commercial | Closed |
-| [Cruiser](http://wiki.openstreetmap.org/wiki/Cruiser) | Android / Desktop map and navigation application | Proprietary/Free | Closed |
-| [c:geo](https://github.com/cgeo/) | Geocaching | Apache 2.0/Free | Open |
+| [Cruiser](https://wiki.openstreetmap.org/wiki/Cruiser) | Map and navigation platform for Android and Desktop | Proprietary/Free | Closed |
+| [c:geo](https://www.cgeo.org) | Geocaching | Apache 2.0/Free | Open |
 | [DogSheep](https://play.google.com/store/apps/details?id=com.dogsheep) | Customized maps and tours | Proprietary/Free | Closed |
 | [ELEMNT](http://eu.wahoofitness.com/devices/gps-bike-computer-elemnt.html) | GPS bike computer | Proprietary/Commercial | Closed |
 | [Forest(M)ap(p)](https://play.google.com/store/apps/details?id=de.inforst.waldkarte) | Tool for forestry | Proprietary/Commercial | Closed |
@@ -32,6 +32,7 @@
 | [Mapet](http://nspace.hu/mapet/) | Hiking navigation | Proprietary/Free | Closed |
 | [mappa](http://mynativeguide.com/) | Tourist Map | Proprietary/Commercial | Closed |
 | [Mapsforge Tile Server](https://github.com/develar/mapsforge-tile-server) | Tile Server | MIT/Free | Open |
+| [Mapsforge Tile Server](https://github.com/telemaxx/mapsforgesrv) | Tile Server | GPL3+/Free | Open |
 | [Mapsforge-Web](https://github.com/virus-warnning/mapsforge-web) | Tile Server for Taiwan | MIT/Free | Open |
 | [MapTag](http://www.rockethub.com/projects/9335-maptag) | Offline Location Sharing | Proprietary/Commercial | Closed |
 | [Mobile Atlas Creator](http://mobac.sourceforge.net/) | Creation of offline atlases | GPL/Free | Open |
@@ -40,6 +41,7 @@
 | [myWorkouts](http://www.myworkouts.org/) | Sports and GPS Tracker | Proprietary/Free | Closed |
 | [Nautilus Charts](https://play.google.com/store/apps/details?id=gr.talent.nautiluscharts) | Offline Nautical Charts plotting and positioning system | Proprietary/Commercial | Closed |
 | [Navi Cyprus](https://play.google.com/store/apps/developer?id=Talent+S.A.) | Map and navigation application | Proprietary/Free and Commercial | Closed |
+| [Norgutel](https://play.google.com/store/apps/details?id=com.norgutel.app) | Secure real-time location sharing within a group of people | Proprietary/Free (in-app purchases) | Closed |
 | [nsoria Fitness](https://play.google.com/store/apps/details?id=com.nsoria.fit) | GPS Bike Computer, Activity Tracker, Map and Navigation Application | Proprietary/Free | Closed |
 | [Nutiteq](https://github.com/nutiteq/hellomap3d) | 2.5 / 3D Map View SDK with 3D Models | MIT/Free and Commercial | Open |
 | [Offline City Map](http://topobyte.de/) | Tourist Map | Proprietary/Commercial | Closed |
@@ -55,11 +57,11 @@
 | [Serval Maps](http://developer.servalproject.org/dokuwiki/doku.php?id=content:servalmaps:main_page) | Collaborative Mapping using a Mesh Network | GPL3/Free | Open |
 | [TingBY](http://ting.by/) | City guide | Proprietary/Free | Closed |
 | [Ultra GPS Logger](https://play.google.com/store/apps/details?id=com.flashlight.ultra.gps.logger) | GPS tracker | Proprietary/Commercial | Closed |
+| [Urban Biker](https://play.google.com/store/apps/details?id=com.sublimis.urbanbiker) | Activity tracker, maps, navigation, dashboard | Proprietary/Free | Closed |
 | [UtalTransitMap](https://play.google.com/store/apps/details?id=com.mdmitry1973.utahtransitmap) | Transport Guide | Proprietary/Free | Closed |
 | [Vectorial Map](http://www.vectorialmap.com/) | Map viewer and tracking | Proprietary/Commercial | Closed |
 | [Villagers feng shui](https://play.google.com/store/apps/details?id=tacoball.com.geomancer) | Local service for Taiwan | LGPL3/Free | Open |
 | [Visitor](https://play.google.com/store/apps/details?id=org.treefish.visitor) ([Demo](https://play.google.com/store/apps/details?id=org.treefish.visitor.demo)) | Save places and share them with others | Proprietary/Free and Commercial | Closed |
 | [Watertrack ECO](http://watertrack.de/) | GPS Tracking on Germany Waterways | Proprietary/Free | Closed |
+| [WhereYouGo](https://www.whereyougo.org) | Geocaching | GPL3/Free | Open |
 | [Wikiloc](http://www.wikiloc.com/outdoor-navigation-app) | Map Viewer & Track recording/following | Proprietary/Free (in-app purchases) | Closed |
-
-You know an application that is missing here? Please inform us by sending a message via our public [forum](https://groups.google.com/group/mapsforge-dev).

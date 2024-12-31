@@ -21,12 +21,17 @@ import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.map.model.DisplayModel;
+
+import java.util.logging.Logger;
 
 public abstract class Layer {
     protected DisplayModel displayModel;
     private Redrawer assignedRedrawer;
     private boolean visible = true;
+
+    private static final Logger LOGGER = Logger.getLogger(Layer.class.getName());
 
     /**
      * Draws this {@code Layer} on the given canvas.
@@ -35,8 +40,9 @@ public abstract class Layer {
      * @param zoomLevel    the zoom level at which this {@code Layer} should draw itself.
      * @param canvas       the canvas on which this {@code Layer} should draw itself.
      * @param topLeftPoint the top-left pixel position of the canvas relative to the top-left map position.
+     * @param rotation     the rotation definition.
      */
-    public abstract void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint);
+    public abstract void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint, Rotation rotation);
 
     /**
      * Gets the geographic position of this layer element, if it exists.
@@ -169,7 +175,8 @@ public abstract class Layer {
 
     final synchronized void assign(Redrawer redrawer) {
         if (this.assignedRedrawer != null) {
-            throw new IllegalStateException("layer already assigned");
+            LOGGER.warning("layer already assigned");
+            return;
         }
 
         this.assignedRedrawer = redrawer;
@@ -178,7 +185,8 @@ public abstract class Layer {
 
     final synchronized void unassign() {
         if (this.assignedRedrawer == null) {
-            throw new IllegalStateException("layer is not assigned");
+            LOGGER.warning("layer is not assigned");
+            return;
         }
 
         this.assignedRedrawer = null;

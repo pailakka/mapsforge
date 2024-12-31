@@ -25,17 +25,17 @@ import org.mapsforge.core.model.Rectangle;
 public interface GraphicContext {
     void drawBitmap(Bitmap bitmap, int left, int top);
 
-    void drawBitmap(Bitmap bitmap, int left, int top, float alpha, Filter filter);
+    void drawBitmap(Bitmap bitmap, int left, int top, float alpha);
 
     void drawBitmap(Bitmap bitmap, Matrix matrix);
 
-    void drawBitmap(Bitmap bitmap, Matrix matrix, float alpha, Filter filter);
+    void drawBitmap(Bitmap bitmap, Matrix matrix, float alpha);
 
     void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
                     int dstLeft, int dstTop, int dstRight, int dstBottom);
 
     void drawBitmap(Bitmap bitmap, int srcLeft, int srcTop, int srcRight, int srcBottom,
-                    int dstLeft, int dstTop, int dstRight, int dstBottom, float alpha, Filter filter);
+                    int dstLeft, int dstTop, int dstRight, int dstBottom, float alpha);
 
     void drawCircle(int x, int y, int radius, Paint paint);
 
@@ -74,5 +74,5 @@ public interface GraphicContext {
      * Shade tileRect neutral if bitmap is null (and shadeRect).
      * Shade tileRect with bitmap otherwise.
      */
-    void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude);
+    void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude, int color);
 }

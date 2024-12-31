@@ -2,6 +2,7 @@
  * Copyright 2015-2019 devemux86
  * Copyright 2017-2018 Gustl22
  * Copyright 2019 Kamil Donoval
+ * Copyright 2022 Juanjo-MC
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -118,7 +119,7 @@ public final class PoiWriter {
         try {
             this.categoryFilter.addCategory(this.categoryManager.getRootCategory());
         } catch (UnknownPoiCategoryException e) {
-            LOGGER.warning("Could not add category to filter: " + e.getMessage());
+            LOGGER.warning("Could not add category to filter: " + e.toString());
         }
 
         LOGGER.info("Adding tag mappings...");
@@ -299,9 +300,10 @@ public final class PoiWriter {
         this.conn = DriverManager.getConnection("jdbc:sqlite:" + this.configuration.getOutputFile().getAbsolutePath());
         this.conn.createStatement().execute(DbConstants.DROP_NODES_STATEMENT);
         this.conn.createStatement().execute(DbConstants.DROP_WAYNODES_STATEMENT);
-        this.conn.close();
-
-        this.conn = DriverManager.getConnection("jdbc:sqlite:" + this.configuration.getOutputFile().getAbsolutePath());
+        this.conn.createStatement().execute("VACUUM;");
+        //this.conn.createStatement().execute(DbConstants.CREATE_DATA_IDX_STATEMENT);
+        this.conn.createStatement().execute(DbConstants.CREATE_INDEX_IDX_LAT_STATEMENT);
+        this.conn.createStatement().execute(DbConstants.CREATE_INDEX_IDX_LON_STATEMENT);
         this.conn.createStatement().execute("VACUUM;");
         this.conn.close();
     }
@@ -320,8 +322,11 @@ public final class PoiWriter {
         stmt.execute(DbConstants.DROP_WAYNODES_STATEMENT);
         stmt.execute(DbConstants.DROP_NODES_STATEMENT);
         stmt.execute(DbConstants.DROP_METADATA_STATEMENT);
+        stmt.execute(DbConstants.DROP_INDEX_IDX_LAT_STATEMENT);
+        stmt.execute(DbConstants.DROP_INDEX_IDX_LON_STATEMENT);
         stmt.execute(DbConstants.DROP_INDEX_STATEMENT);
         stmt.execute(DbConstants.DROP_CATEGORY_MAP_STATEMENT);
+        //stmt.execute(DbConstants.DROP_DATA_IDX_STATEMENT);
         stmt.execute(DbConstants.DROP_DATA_STATEMENT);
         stmt.execute(DbConstants.DROP_CATEGORIES_STATEMENT);
         stmt.execute(DbConstants.CREATE_CATEGORIES_STATEMENT);
@@ -382,7 +387,7 @@ public final class PoiWriter {
                     }
                 }
                 ++this.nNodes;
-                if (this.configuration.isWays()) {
+                if (this.configuration.isWays() && (!this.configuration.isWayFiltering() || node.getTags().isEmpty())) {
                     writeNode(node);
                 }
                 processEntity(node, node.getLatitude(), node.getLongitude());
@@ -495,7 +500,7 @@ public final class PoiWriter {
                         }
                     }
                 } catch (UnknownPoiCategoryException e) {
-                    LOGGER.warning("The '" + tagStr + "' tag refers to a POI that does not exist: " + e.getMessage());
+                    LOGGER.warning("The '" + tagStr + "' tag refers to a POI that does not exist: " + e.toString());
                 }
             }
         }
@@ -576,11 +581,11 @@ public final class PoiWriter {
     Map<String, String> stringToTags(String tagsmapstring) {
         String[] sb = tagsmapstring.split("\\r");
         Map<String, String> map = new HashMap<>();
-        for (String key : sb) {
-            if (key.contains("=")) {
-                String[] set = key.split("=");
-                if (set.length == 2)
-                    map.put(set[0], set[1]);
+        for (String set : sb) {
+            if (set.indexOf(org.mapsforge.core.model.Tag.KEY_VALUE_SEPARATOR) > -1) {
+                String key = set.split(String.valueOf(org.mapsforge.core.model.Tag.KEY_VALUE_SEPARATOR))[0];
+                String value = set.substring(key.length() + 1);
+                map.put(key, value);
             }
         }
         return map;
@@ -617,7 +622,7 @@ public final class PoiWriter {
         if (bb == null) {
             // Calculate bounding box from poi coordinates
             Statement stmt = this.conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT MIN(minLat), MIN(minLon), MAX(maxLat), MAX(maxLon) FROM poi_index;");
+            ResultSet rs = stmt.executeQuery("SELECT MIN(lat), MIN(lon), MAX(lat), MAX(lon) FROM poi_index;");
             rs.next();
             bb = new BoundingBox(rs.getDouble(1), rs.getDouble(2), rs.getDouble(3), rs.getDouble(4));
         }
@@ -695,9 +700,7 @@ public final class PoiWriter {
             // Index data
             this.pStmtIndex.setLong(1, id);
             this.pStmtIndex.setDouble(2, latitude);
-            this.pStmtIndex.setDouble(3, latitude);
-            this.pStmtIndex.setDouble(4, longitude);
-            this.pStmtIndex.setDouble(5, longitude);
+            this.pStmtIndex.setDouble(3, longitude);
             this.pStmtIndex.addBatch();
 
             // POI data

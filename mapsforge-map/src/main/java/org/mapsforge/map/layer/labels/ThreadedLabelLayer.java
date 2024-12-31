@@ -1,5 +1,6 @@
 /*
  * Copyright 2016 Ludwig M Brinckmann
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -19,10 +20,10 @@ import org.mapsforge.core.graphics.GraphicFactory;
 import org.mapsforge.core.mapelements.MapElementContainer;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.model.Tile;
 import org.mapsforge.map.util.LayerUtil;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,6 +42,7 @@ public class ThreadedLabelLayer extends LabelLayer {
     Future<?> future;
     Tile requestedUpperLeft;
     Tile requestedLowerRight;
+    Rotation requestedRotation;
 
     public ThreadedLabelLayer(GraphicFactory graphicFactory, LabelStore labelStore) {
         super(graphicFactory, labelStore);
@@ -48,29 +50,30 @@ public class ThreadedLabelLayer extends LabelLayer {
     }
 
     @Override
-    public void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint) {
+    public void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint, Rotation rotation) {
         Tile newUpperLeft = LayerUtil.getUpperLeft(boundingBox, zoomLevel, this.displayModel.getTileSize());
         Tile newLowerRight = LayerUtil.getLowerRight(boundingBox, zoomLevel, this.displayModel.getTileSize());
         if (!newUpperLeft.equals(this.upperLeft) || !newLowerRight.equals(this.lowerRight)
-                || this.lastLabelStoreVersion != this.labelStore.getVersion()) {
-            getData(newUpperLeft, newLowerRight);
+                || this.lastLabelStoreVersion != this.labelStore.getVersion() || !rotation.equals(this.rotation)) {
+            getData(newUpperLeft, newLowerRight, rotation);
         }
 
         if (this.upperLeft != null && Tile.tileAreasOverlap(this.upperLeft, this.lowerRight, newUpperLeft, newLowerRight)) {
             // draw data if the area of data overlaps, even if the areas are not the same. This
             // is to make layer more responsive.
-            draw(canvas, topLeftPoint);
+            draw(canvas, topLeftPoint, rotation);
         }
     }
 
-    protected void getData(final Tile upperLeft, final Tile lowerRight) {
-        if (upperLeft.equals(this.requestedUpperLeft) && lowerRight.equals(this.requestedLowerRight)) {
+    protected void getData(final Tile upperLeft, final Tile lowerRight, final Rotation rotation) {
+        if (upperLeft.equals(this.requestedUpperLeft) && lowerRight.equals(this.requestedLowerRight) && rotation.equals(requestedRotation)) {
             // same data already requested
             return;
         }
 
         this.requestedUpperLeft = upperLeft;
         this.requestedLowerRight = lowerRight;
+        this.requestedRotation = rotation;
 
         if (this.future != null) {
             // we only want a single item in the queue, no point retrieving data that is not required
@@ -82,16 +85,13 @@ public class ThreadedLabelLayer extends LabelLayer {
             public void run() {
                 List<MapElementContainer> visibleItems = ThreadedLabelLayer.this.labelStore.getVisibleItems(upperLeft, lowerRight);
 
-                ThreadedLabelLayer.this.elementsToDraw = LayerUtil.collisionFreeOrdered(visibleItems);
-
-                // TODO this is code duplicated from CanvasRasterer::drawMapElements, should be factored out
-                // what LayerUtil.collisionFreeOrdered gave us is a list where highest priority comes first,
-                // so we need to reverse that in order to
-                // draw elements in order of priority: lower priority first, so more important
+                // We need to draw elements in order of ascending priority: lower priority first, so more important
                 // elements will be drawn on top (in case of display=true) items.
-                Collections.sort(ThreadedLabelLayer.this.elementsToDraw);
+                ThreadedLabelLayer.this.elementsToDraw = LayerUtil.collisionFreeOrdered(visibleItems, rotation);
+
                 ThreadedLabelLayer.this.upperLeft = upperLeft;
                 ThreadedLabelLayer.this.lowerRight = lowerRight;
+                ThreadedLabelLayer.this.rotation = rotation;
                 ThreadedLabelLayer.this.lastLabelStoreVersion = labelStore.getVersion();
                 ThreadedLabelLayer.this.requestRedraw();
 

@@ -18,25 +18,13 @@
 package org.mapsforge.poi.android.storage;
 
 import android.database.Cursor;
-
+import android.database.sqlite.SQLiteDatabase;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Tag;
-import org.mapsforge.poi.storage.AbstractPoiPersistenceManager;
-import org.mapsforge.poi.storage.DbConstants;
-import org.mapsforge.poi.storage.PoiCategory;
-import org.mapsforge.poi.storage.PoiCategoryFilter;
-import org.mapsforge.poi.storage.PoiFileInfoBuilder;
-import org.mapsforge.poi.storage.PoiPersistenceManager;
-import org.mapsforge.poi.storage.PointOfInterest;
-import org.sqlite.database.sqlite.SQLiteDatabase;
+import org.mapsforge.poi.storage.*;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -47,14 +35,6 @@ import java.util.logging.Logger;
  */
 class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
     private static final Logger LOGGER = Logger.getLogger(AndroidPoiPersistenceManager.class.getName());
-
-    static {
-        try {
-            System.loadLibrary("sqliteX");
-        } catch (Throwable t) {
-            LOGGER.log(Level.SEVERE, t.getMessage(), t);
-        }
-    }
 
     private SQLiteDatabase db = null;
 
@@ -86,7 +66,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
             try {
                 this.db.close();
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
 
@@ -103,7 +83,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
             this.db = SQLiteDatabase.openDatabase(dbFilePath, null, readOnly ? SQLiteDatabase.OPEN_READONLY : SQLiteDatabase.CREATE_IF_NECESSARY);
             this.poiFile = dbFilePath;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         }
 
         // Create file
@@ -111,7 +91,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
             try {
                 createTables();
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
     }
@@ -121,15 +101,21 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
      */
     private void createTables() {
         this.db.execSQL(DbConstants.DROP_METADATA_STATEMENT);
+        this.db.execSQL(DbConstants.DROP_INDEX_IDX_LAT_STATEMENT);
+        this.db.execSQL(DbConstants.DROP_INDEX_IDX_LON_STATEMENT);
         this.db.execSQL(DbConstants.DROP_INDEX_STATEMENT);
         this.db.execSQL(DbConstants.DROP_CATEGORY_MAP_STATEMENT);
+        //this.db.execSQL(DbConstants.DROP_DATA_IDX_STATEMENT);
         this.db.execSQL(DbConstants.DROP_DATA_STATEMENT);
         this.db.execSQL(DbConstants.DROP_CATEGORIES_STATEMENT);
 
         this.db.execSQL(DbConstants.CREATE_CATEGORIES_STATEMENT);
         this.db.execSQL(DbConstants.CREATE_DATA_STATEMENT);
+        //this.db.execSQL(DbConstants.CREATE_DATA_IDX_STATEMENT);
         this.db.execSQL(DbConstants.CREATE_CATEGORY_MAP_STATEMENT);
         this.db.execSQL(DbConstants.CREATE_INDEX_STATEMENT);
+        this.db.execSQL(DbConstants.CREATE_INDEX_IDX_LAT_STATEMENT);
+        this.db.execSQL(DbConstants.CREATE_INDEX_IDX_LON_STATEMENT);
         this.db.execSQL(DbConstants.CREATE_METADATA_STATEMENT);
     }
 
@@ -137,29 +123,26 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
      * @param poiID Id of POI
      * @return Set of PoiCategories
      */
-    private Set<PoiCategory> findCategoriesByID(long poiID) {
+    private Set<PoiCategory> findCategoriesByID(long poiID) throws UnknownPoiCategoryException {
         Cursor cursor = null;
         try {
             Set<PoiCategory> categories = new HashSet<>();
-            String sql = getPoiFileInfo().version < 2 ? DbConstants.FIND_CATEGORIES_BY_ID_STATEMENT_V1 : DbConstants.FIND_CATEGORIES_BY_ID_STATEMENT;
+            String sql = DbConstants.FIND_CATEGORIES_BY_ID_STATEMENT;
             cursor = this.db.rawQuery(sql, new String[]{String.valueOf(poiID)});
             while (cursor.moveToNext()) {
                 long id = cursor.getLong(1);
                 categories.add(this.categoryManager.getPoiCategoryByID((int) id));
             }
             return categories;
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
-        return null;
     }
 
     /**
@@ -176,18 +159,15 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
                 tags.addAll(stringToTags(data));
             }
             return tags;
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
-        return null;
     }
 
     /**
@@ -195,7 +175,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
      */
     @Override
     public Collection<PointOfInterest> findInRect(BoundingBox bb, PoiCategoryFilter filter,
-                                                  List<Tag> patterns, int limit) {
+                                                  List<Tag> patterns, LatLong orderBy, int limit, boolean findCategories) {
         // Clear previous results
         this.ret.clear();
 
@@ -203,7 +183,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
         Cursor cursor = null;
         try {
             int pSize = patterns == null ? 0 : patterns.size();
-            String sql = AbstractPoiPersistenceManager.getSQLSelectString(filter, pSize, getPoiFileInfo().version);
+            String sql = AbstractPoiPersistenceManager.getSQLSelectString(filter, pSize, orderBy);
 
             List<String> selectionArgs = new ArrayList<>();
             selectionArgs.add(String.valueOf(bb.maxLatitude));
@@ -215,31 +195,30 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
                     if (tag == null) {
                         continue;
                     }
-                    selectionArgs.add("%"
-                            + (tag.key.equals("*") ? "" : (tag.key + "="))
-                            + tag.value + "%");
+                    selectionArgs.add("%" + (tag.key.equals("*") ? "" : (tag.key + "=")) + tag.value + "%");
                 }
             }
             selectionArgs.add(String.valueOf(limit));
 
-            cursor = this.db.rawQuery(sql, selectionArgs.toArray(new String[selectionArgs.size()]));
+            cursor = this.db.rawQuery(sql, selectionArgs.toArray(new String[0]));
             while (cursor.moveToNext()) {
                 long id = cursor.getLong(0);
                 double lat = cursor.getDouble(1);
                 double lon = cursor.getDouble(2);
+                String data = cursor.getString(3);
 
-                this.poi = new PointOfInterest(id, lat, lon, findDataByID(id), findCategoriesByID(id));
+                this.poi = new PointOfInterest(id, lat, lon, stringToTags(data), findCategories ? findCategoriesByID(id) : null);
                 this.ret.add(this.poi);
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
 
@@ -259,15 +238,13 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
                 double lon = cursor.getDouble(2);
                 return new LatLong(lat, lon);
             }
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
         return null;
@@ -282,10 +259,14 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
         this.poi = null;
 
         // Query
-        LatLong latlong = findLocationByID(poiID);
-        if (latlong != null) {
-            this.poi = new PointOfInterest(poiID, latlong.latitude, latlong.longitude,
-                    findDataByID(poiID), findCategoriesByID(poiID));
+        try {
+            LatLong latlong = findLocationByID(poiID);
+            if (latlong != null) {
+                this.poi = new PointOfInterest(poiID, latlong.latitude, latlong.longitude,
+                        findDataByID(poiID), findCategoriesByID(poiID));
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         }
 
         return this.poi;
@@ -310,8 +291,6 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
                 this.db.execSQL(DbConstants.INSERT_INDEX_STATEMENT, new String[]{
                         String.valueOf(poi.getId()),
                         String.valueOf(poi.getLatitude()),
-                        String.valueOf(poi.getLatitude()),
-                        String.valueOf(poi.getLongitude()),
                         String.valueOf(poi.getLongitude())
                 });
 
@@ -330,7 +309,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
                 }
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         }
     }
 
@@ -347,35 +326,29 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
      */
     @Override
     public boolean isValidDataBase() {
-        int version = getPoiFileInfo().version;
-
         // Check for table names
         // TODO Is it necessary to get the tables meta data as well?
         int numTables = 0;
         Cursor cursor = null;
         try {
-            String sql = version < 2 ? DbConstants.VALID_DB_STATEMENT_V1 : DbConstants.VALID_DB_STATEMENT;
+            String sql = DbConstants.VALID_DB_STATEMENT;
             cursor = this.db.rawQuery(sql, null);
             if (cursor.moveToNext()) {
                 numTables = cursor.getInt(0);
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
 
-        if (version < 2) {
-            return numTables == DbConstants.NUMBER_OF_TABLES_V1;
-        } else {
-            return numTables == DbConstants.NUMBER_OF_TABLES;
-        }
+        return numTables == DbConstants.NUMBER_OF_TABLES;
     }
 
     /**
@@ -419,14 +392,14 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
                 }
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
 
@@ -443,7 +416,7 @@ class AndroidPoiPersistenceManager extends AbstractPoiPersistenceManager {
             this.db.execSQL(DbConstants.DELETE_DATA_STATEMENT, new String[]{String.valueOf(poi.getId())});
             this.db.execSQL(DbConstants.DELETE_CATEGORY_MAP_STATEMENT, new String[]{String.valueOf(poi.getId())});
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         }
     }
 }

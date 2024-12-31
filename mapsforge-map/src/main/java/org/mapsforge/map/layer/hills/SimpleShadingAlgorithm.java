@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 usrusr
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -14,28 +15,34 @@
  */
 package org.mapsforge.map.layer.hills;
 
-import java.io.File;
-import java.io.FileInputStream;
+import org.mapsforge.core.util.IOUtils;
+
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
+import java.io.InputStream;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * Simple, but expressive slope visualisation (e.g. no pretentions of physical accuracy, separate north and west lightsources instead of one northwest, so a round dome would not look round, saturation works different depending on slope direction)
+ * Simple, but expressive slope visualisation (e.g. no pretensions of physical accuracy, separate north and west light sources instead of one northwest,
+ * so a round dome would not look round, saturation works different depending on slope direction)
  * <p>
- * <p>variations can be created by overriding {@link #exaggerate(double)}</p>
+ * <p>Variations can be created by overriding {@link #exaggerate(double)}</p>
+ * <p>
+ * Note: For better results and greater flexibility consider using the newer algorithms, e.g. {@link AdaptiveClasyHillShading}, {@link StandardClasyHillShading} or {@link HiResClasyHillShading}.
+ * </p>
+ *
+ * @see AdaptiveClasyHillShading
+ * @see HiResClasyHillShading
+ * @see StandardClasyHillShading
+ * @see HalfResClasyHillShading
+ * @see QuarterResClasyHillShading
  */
-public class SimpleShadingAlgorithm implements ShadingAlgorithm {
-    private static final Logger LOGGER = Logger.getLogger(SimpleShadingAlgorithm.class.getName());
+public class SimpleShadingAlgorithm extends AShadingAlgorithm {
+
     public final double linearity;
     public final double scale;
 
-    private byte[] lookup;
-    private int lookupOffset;
+    protected byte[] lookup;
+    protected int lookupOffset;
 
     public SimpleShadingAlgorithm() {
         this(0.1d, 0.666d);
@@ -56,13 +63,6 @@ public class SimpleShadingAlgorithm implements ShadingAlgorithm {
         this.scale = Math.max(0d, scale);
     }
 
-    private static short readNext(ByteBuffer din, short fallback) throws IOException {
-        short read = din.getShort();
-        if (read == Short.MIN_VALUE)
-            return fallback;
-        return read;
-    }
-
     /**
      * should calculate values from -128 to +127 using whatever range required (within reason)
      *
@@ -76,60 +76,39 @@ public class SimpleShadingAlgorithm implements ShadingAlgorithm {
     }
 
     @Override
-    public int getAxisLenght(HgtCache.HgtFileInfo source) {
-        long size = source.getSize();
-        long elements = size / 2;
-        int rowLen = (int) Math.ceil(Math.sqrt(elements));
-        if (rowLen * rowLen * 2 != size) {
-            return 0;
-        }
-        return rowLen - 1;
-    }
+    public RawShadingResult transformToByteBuffer(HgtFileInfo source, int padding, int zoomLevel, double pxPerLat, double pxPerLon) {
+        final int axisLength = getOutputAxisLen(source, zoomLevel, pxPerLat, pxPerLon);
+        final int rowLen = axisLength + 1;
 
-    @Override
-    public RawShadingResult transformToByteBuffer(HgtCache.HgtFileInfo source, int padding) {
-        int axisLength = getAxisLenght(source);
-        int rowLen = axisLength + 1;
-        FileInputStream stream = null;
-        FileChannel channel = null;
+        InputStream map = null;
         try {
-            File file = source.getFile();
-            stream = new FileInputStream(file);
-            channel = stream.getChannel();
-            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length());
-            map.order(ByteOrder.BIG_ENDIAN);
-            byte[] bytes = convert(map, axisLength, rowLen, padding);
+            map = source
+                    .getFile()
+                    .asStream();
 
+            final byte[] bytes;
+            if (map != null) {
+                bytes = convert(map, axisLength, rowLen, padding, zoomLevel, pxPerLat, pxPerLon, source);
+            } else {
+                // If stream could not be opened, simply return zeros
+                final int bitmapWidth = axisLength + 2 * padding;
+                bytes = new byte[bitmapWidth * bitmapWidth];
+            }
             return new RawShadingResult(bytes, axisLength, axisLength, padding);
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
             return null;
         } finally {
-            if (channel != null) try {
-                channel.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            if (stream != null) try {
-                stream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            IOUtils.closeQuietly(map);
         }
     }
 
-    private byte[] convert(MappedByteBuffer din, int axisLength, int rowLen, int padding) throws IOException {
-        byte[] bytes;
+    protected byte[] convert(InputStream din, int axisLength, int rowLen, int padding, int zoomLevel, double pxPerLat, double pxPerLon, HgtFileInfo fileInfo) throws IOException {
+        final byte[] bytes = new byte[(axisLength + 2 * padding) * (axisLength + 2 * padding)];
+        final short[] ringbuffer = new short[rowLen];
 
-        short[] ringbuffer = new short[rowLen];
-        bytes = new byte[(axisLength + 2 * padding) * (axisLength + 2 * padding)];
-
-//        din.load();
-
-        byte[] lookup = this.lookup;
         if (lookup == null) {
             fillLookup();
-            lookup = this.lookup;
         }
 
         int outidx = (axisLength + 2 * padding) * padding + padding;
@@ -141,6 +120,7 @@ public class SimpleShadingAlgorithm implements ShadingAlgorithm {
                 ringbuffer[rbcur++] = last;
             }
         }
+
         for (int line = 1; line <= axisLength; line++) {
             if (rbcur >= rowLen) {
                 rbcur = 0;
@@ -151,38 +131,47 @@ public class SimpleShadingAlgorithm implements ShadingAlgorithm {
             ringbuffer[rbcur++] = sw;
 
             for (int col = 1; col <= axisLength; col++) {
-                short ne = ringbuffer[rbcur];
-                short se = readNext(din, ne);
+                final short ne = ringbuffer[rbcur];
+                final short se = readNext(din, ne);
                 ringbuffer[rbcur++] = se;
 
-                int noso = -((se - ne) + (sw - nw));
+                final int noso = -((se - ne) + (sw - nw));
+                final int eawe = -((ne - nw) + (se - sw));
 
-                int eawe = -((ne - nw) + (se - sw));
+                final int zeroIsFlat = exaggerate(lookup, noso) + exaggerate(lookup, eawe);
 
-                noso = (int) exaggerate(lookup, noso);
-                eawe = (int) exaggerate(lookup, eawe);
-
-                int zeroIsFlat = noso + eawe;
-                int intVal = Math.min(255, Math.max(0, zeroIsFlat + 127));
-
-                int shade = intVal & 0xFF;
+                final int shade = fixFlatBias(zeroIsFlat + 127);
 
                 bytes[outidx++] = (byte) shade;
 
                 nw = ne;
                 sw = se;
             }
+
             outidx += 2 * padding;
         }
+
         return bytes;
     }
 
-    private byte exaggerate(byte[] lookup, int x) {
+    protected byte exaggerate(byte[] lookup, int x) {
 
         return lookup[Math.max(0, Math.min(lookup.length - 1, x + lookupOffset))];
     }
 
-    private void fillLookup() {
+    protected int fixFlatBias(final int shade) {
+        final int output;
+
+        if (shade > 127) {
+            output = 2 * (shade - 127);
+        } else {
+            output = 127 - shade;
+        }
+
+        return Math.min(255, Math.max(0, output));
+    }
+
+    protected void fillLookup() {
         int lowest = 0;
         while (lowest > -1024) {
             double exaggerate = exaggerate(lowest);

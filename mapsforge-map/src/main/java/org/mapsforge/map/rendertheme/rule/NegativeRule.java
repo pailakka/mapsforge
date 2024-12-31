@@ -19,23 +19,56 @@ import org.mapsforge.core.model.Tag;
 import java.util.List;
 
 class NegativeRule extends Rule {
-    private final AttributeMatcher attributeMatcher;
 
-    NegativeRule(RuleBuilder ruleBuilder, AttributeMatcher attributeMatcher) {
+    final NegativeMatcher attributeMatcher;
+
+    /* (-) 'exclusive negation' matches when either KEY is not present
+     * or KEY is present and any VALUE is NOT present
+     *
+     * (\) 'except negation' matches when KEY is present
+     * none items of VALUE is present (TODO).
+     * (can be emulated by <rule k="a"><rule k=a v="-|b|c">...</rule></rule>)
+     *
+     * (~) 'non-exclusive negation' matches when either KEY is not present
+     * or KEY is present and any VALUE is present */
+
+    final boolean exclusive;
+
+    NegativeRule(RuleBuilder ruleBuilder, NegativeMatcher attributeMatcher, boolean exclusive) {
         super(ruleBuilder);
 
         this.attributeMatcher = attributeMatcher;
+        this.exclusive = exclusive;
     }
 
     @Override
     boolean matchesNode(List<Tag> tags, byte zoomLevel) {
-        return this.zoomMin <= zoomLevel && this.zoomMax >= zoomLevel && this.elementMatcher.matches(Element.NODE)
-                && this.attributeMatcher.matches(tags);
+        return this.zoomMin <= zoomLevel
+                && this.zoomMax >= zoomLevel
+                && this.elementMatcher.matches(Element.NODE)
+                && matchesTags(tags);
     }
 
     @Override
     boolean matchesWay(List<Tag> tags, byte zoomLevel, Closed closed) {
-        return this.zoomMin <= zoomLevel && this.zoomMax >= zoomLevel && this.elementMatcher.matches(Element.WAY)
-                && this.closedMatcher.matches(closed) && this.attributeMatcher.matches(tags);
+        return this.zoomMin <= zoomLevel
+                && this.zoomMax >= zoomLevel
+                && this.elementMatcher.matches(Element.WAY)
+                && this.closedMatcher.matches(closed)
+                && matchesTags(tags);
+    }
+
+    private boolean matchesTags(List<Tag> tags) {
+        if (attributeMatcher.keyListDoesNotContainKeys(tags)) {
+            return true;
+        }
+
+        // check tags
+        for (int i = 0, n = tags.size(); i < n; i++) {
+            if (attributeMatcher.matches(tags.get(i))) {
+                return !exclusive;
+            }
+        }
+        return exclusive;
     }
 }

@@ -1,9 +1,11 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2014-2018 devemux86
+ * Copyright 2014-2021 devemux86
  * Copyright 2017 usrusr
  * Copyright 2017 MarcelHeckel
+ * Copyright 2021 eddiemuc
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -19,21 +21,14 @@
 package org.mapsforge.map.rendertheme.rule;
 
 import org.mapsforge.core.graphics.GraphicFactory;
+import org.mapsforge.core.util.Constants;
 import org.mapsforge.core.util.IOUtils;
 import org.mapsforge.map.model.DisplayModel;
 import org.mapsforge.map.rendertheme.XmlRenderTheme;
 import org.mapsforge.map.rendertheme.XmlRenderThemeStyleLayer;
 import org.mapsforge.map.rendertheme.XmlRenderThemeStyleMenu;
 import org.mapsforge.map.rendertheme.XmlUtils;
-import org.mapsforge.map.rendertheme.renderinstruction.Area;
-import org.mapsforge.map.rendertheme.renderinstruction.Caption;
-import org.mapsforge.map.rendertheme.renderinstruction.Circle;
-import org.mapsforge.map.rendertheme.renderinstruction.Hillshading;
-import org.mapsforge.map.rendertheme.renderinstruction.Line;
-import org.mapsforge.map.rendertheme.renderinstruction.LineSymbol;
-import org.mapsforge.map.rendertheme.renderinstruction.PathText;
-import org.mapsforge.map.rendertheme.renderinstruction.RenderInstruction;
-import org.mapsforge.map.rendertheme.renderinstruction.Symbol;
+import org.mapsforge.map.rendertheme.renderinstruction.*;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 import org.xmlpull.v1.XmlPullParserFactory;
@@ -60,12 +55,16 @@ public final class RenderThemeHandler {
     private static final String UNEXPECTED_ELEMENT = "unexpected element: ";
     private static XmlPullParserFactory xmlPullParserFactory = null;
 
+    // Override hillshading values
+    public static int HILLSHADING_MAGNITUDE = -1;
+    public static byte HILLSHADING_ZOOM_MIN = -1;
+    public static byte HILLSHADING_ZOOM_MAX = -1;
+
     public static RenderTheme getRenderTheme(GraphicFactory graphicFactory, DisplayModel displayModel,
                                              XmlRenderTheme xmlRenderTheme) throws IOException, XmlPullParserException {
         XmlPullParser pullParser = getXmlPullParserFactory().newPullParser();
 
-        RenderThemeHandler renderThemeHandler = new RenderThemeHandler(graphicFactory, displayModel,
-                xmlRenderTheme.getRelativePathPrefix(), xmlRenderTheme, pullParser);
+        RenderThemeHandler renderThemeHandler = new RenderThemeHandler(graphicFactory, displayModel, xmlRenderTheme, pullParser);
         InputStream inputStream = null;
         try {
             inputStream = xmlRenderTheme.getRenderThemeAsStream();
@@ -91,26 +90,23 @@ public final class RenderThemeHandler {
     private Set<String> categories;
     private Rule currentRule;
     private final DisplayModel displayModel;
-    private final Stack<Element> elementStack = new Stack<Element>();
+    private final Stack<Element> elementStack = new Stack<>();
     private final GraphicFactory graphicFactory;
     private int level;
     private final XmlPullParser pullParser;
     private String qName;
-    private final String relativePathPrefix;
     private RenderTheme renderTheme;
-    private final Stack<Rule> ruleStack = new Stack<Rule>();
-    private Map<String, Symbol> symbols = new HashMap<String, Symbol>();
+    private final Stack<Rule> ruleStack = new Stack<>();
+    private final Map<String, Symbol> symbols = new HashMap<>();
     private final XmlRenderTheme xmlRenderTheme;
     private XmlRenderThemeStyleMenu renderThemeStyleMenu;
     private XmlRenderThemeStyleLayer currentLayer;
 
-    private RenderThemeHandler(GraphicFactory graphicFactory, DisplayModel displayModel, String relativePathPrefix,
-                               XmlRenderTheme xmlRenderTheme, XmlPullParser pullParser) {
+    private RenderThemeHandler(GraphicFactory graphicFactory, DisplayModel displayModel, XmlRenderTheme xmlRenderTheme, XmlPullParser pullParser) {
         super();
         this.pullParser = pullParser;
         this.graphicFactory = graphicFactory;
         this.displayModel = displayModel;
-        this.relativePathPrefix = relativePathPrefix;
         this.xmlRenderTheme = xmlRenderTheme;
     }
 
@@ -187,7 +183,7 @@ public final class RenderThemeHandler {
             } else if ("area".equals(qName)) {
                 checkState(qName, Element.RENDERING_INSTRUCTION);
                 Area area = new Area(this.graphicFactory, this.displayModel, qName, pullParser, this.level++,
-                        this.relativePathPrefix);
+                        this.xmlRenderTheme.getRelativePathPrefix(), this.xmlRenderTheme.getResourceProvider());
                 if (isVisible(area)) {
                     this.currentRule.addRenderingInstruction(area);
                 }
@@ -233,14 +229,14 @@ public final class RenderThemeHandler {
             } else if ("line".equals(qName)) {
                 checkState(qName, Element.RENDERING_INSTRUCTION);
                 Line line = new Line(this.graphicFactory, this.displayModel, qName, pullParser, this.level++,
-                        this.relativePathPrefix);
+                        this.xmlRenderTheme.getRelativePathPrefix(), this.xmlRenderTheme.getResourceProvider());
                 if (isVisible(line)) {
                     this.currentRule.addRenderingInstruction(line);
                 }
             } else if ("lineSymbol".equals(qName)) {
                 checkState(qName, Element.RENDERING_INSTRUCTION);
                 LineSymbol lineSymbol = new LineSymbol(this.graphicFactory, this.displayModel, qName,
-                        pullParser, this.relativePathPrefix);
+                        pullParser, this.xmlRenderTheme.getRelativePathPrefix(), this.xmlRenderTheme.getResourceProvider());
                 if (isVisible(lineSymbol)) {
                     this.currentRule.addRenderingInstruction(lineSymbol);
                 }
@@ -274,7 +270,7 @@ public final class RenderThemeHandler {
             } else if ("symbol".equals(qName)) {
                 checkState(qName, Element.RENDERING_INSTRUCTION);
                 Symbol symbol = new Symbol(this.graphicFactory, this.displayModel, qName, pullParser,
-                        this.relativePathPrefix);
+                        this.xmlRenderTheme.getRelativePathPrefix(), this.xmlRenderTheme.getResourceProvider());
                 if (isVisible(symbol)) {
                     this.currentRule.addRenderingInstruction(symbol);
                 }
@@ -285,11 +281,11 @@ public final class RenderThemeHandler {
             } else if ("hillshading".equals(qName)) {
                 checkState(qName, Element.RULE);
                 String category = null;
-                byte minZoom = 5;
+                byte minZoom = 9;
                 byte maxZoom = 17;
                 byte layer = 5;
-                short magnitude = 64;
-                boolean always = false;
+                int magnitude = Constants.HILLSHADING_MAGNITUDE_DEFAULT;
+                int color = Constants.HILLSHADING_COLOR_DEFAULT;
 
                 for (int i = 0; i < pullParser.getAttributeCount(); ++i) {
                     String name = pullParser.getAttributeName(i);
@@ -298,22 +294,27 @@ public final class RenderThemeHandler {
                     if ("cat".equals(name)) {
                         category = value;
                     } else if ("zoom-min".equals(name)) {
-                        minZoom = XmlUtils.parseNonNegativeByte("zoom-min", value);
+                        minZoom = XmlUtils.parseNonNegativeByte(name, value);
                     } else if ("zoom-max".equals(name)) {
-                        maxZoom = XmlUtils.parseNonNegativeByte("zoom-max", value);
+                        maxZoom = XmlUtils.parseNonNegativeByte(name, value);
                     } else if ("magnitude".equals(name)) {
-                        magnitude = (short) XmlUtils.parseNonNegativeInteger("magnitude", value);
+                        magnitude = XmlUtils.parseNonNegativeInteger(name, value);
                         if (magnitude > 255)
                             throw new XmlPullParserException("Attribute 'magnitude' must not be > 255");
-                    } else if ("always".equals(name)) {
-                        always = Boolean.valueOf(value);
+                    } else if ("color".equals(name)) {
+                        color = XmlUtils.getColor(this.graphicFactory, value);
                     } else if ("layer".equals(name)) {
-                        layer = XmlUtils.parseNonNegativeByte("layer", value);
+                        layer = XmlUtils.parseNonNegativeByte(name, value);
                     }
                 }
 
+                // Override hillshading values
+                minZoom = HILLSHADING_ZOOM_MIN != -1 ? HILLSHADING_ZOOM_MIN : minZoom;
+                maxZoom = HILLSHADING_ZOOM_MAX != -1 ? HILLSHADING_ZOOM_MAX : maxZoom;
+                magnitude = HILLSHADING_MAGNITUDE != -1 ? HILLSHADING_MAGNITUDE : magnitude;
+
                 int hillShadingLevel = this.level++;
-                Hillshading hillshading = new Hillshading(minZoom, maxZoom, magnitude, layer, always, hillShadingLevel, this.graphicFactory);
+                Hillshading hillshading = new Hillshading(minZoom, maxZoom, magnitude, color, layer, hillShadingLevel, this.graphicFactory);
 
                 if (this.categories == null || category == null
                         || this.categories.contains(category)) {
@@ -323,7 +324,7 @@ public final class RenderThemeHandler {
                 throw new XmlPullParserException("unknown element: " + qName);
             }
         } catch (IOException e) {
-            LOGGER.warning("Rendertheme missing or invalid resource " + e.getMessage());
+            LOGGER.warning("Rendertheme missing or invalid resource " + e.toString());
         }
     }
 

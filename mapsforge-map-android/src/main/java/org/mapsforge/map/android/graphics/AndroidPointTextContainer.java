@@ -1,6 +1,7 @@
 /*
  * Copyright 2014 Ludwig M Brinckmann
  * Copyright 2014-2016 devemux86
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -15,14 +16,15 @@
  */
 package org.mapsforge.map.android.graphics;
 
+import android.graphics.RectF;
+import android.graphics.text.LineBreaker;
+import android.os.Build;
 import android.text.Layout;
 import android.text.StaticLayout;
 import android.text.TextPaint;
 
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Display;
-import org.mapsforge.core.graphics.Filter;
-import org.mapsforge.core.graphics.GraphicUtils;
 import org.mapsforge.core.graphics.Matrix;
 import org.mapsforge.core.graphics.Paint;
 import org.mapsforge.core.graphics.Position;
@@ -30,17 +32,41 @@ import org.mapsforge.core.mapelements.PointTextContainer;
 import org.mapsforge.core.mapelements.SymbolContainer;
 import org.mapsforge.core.model.Point;
 import org.mapsforge.core.model.Rectangle;
+import org.mapsforge.core.model.Rotation;
 
 public class AndroidPointTextContainer extends PointTextContainer {
+
+    protected final Rectangle boundary;
     private StaticLayout backLayout;
     private StaticLayout frontLayout;
+    public final int textHeight;
+    public final int textWidth;
+    public final boolean isMultiline;
+    public final Rectangle textBounds;
+    public final int fontPadding;
 
-    AndroidPointTextContainer(Point xy, Display display, int priority, String text, Paint paintFront, Paint paintBack,
+    protected final android.graphics.Paint debugClashBoundsPaint;
+
+    AndroidPointTextContainer(Point xy, double horizontalOffset, double verticalOffset,
+                              Display display, int priority, String text, Paint paintFront, Paint paintBack,
                               SymbolContainer symbolContainer, Position position, int maxTextWidth) {
-        super(xy, display, priority, text, paintFront, paintBack, symbolContainer, position, maxTextWidth);
+        super(xy, horizontalOffset, verticalOffset, display, priority, text,
+                paintFront, paintBack, symbolContainer, position, maxTextWidth);
+
+        final Paint measurePaint;
+        if (paintBack != null) {
+            measurePaint = paintBack;
+        } else {
+            measurePaint = paintFront;
+        }
+
+        this.textBounds = measurePaint.getTextBounds(text);
+        this.fontPadding = AndroidPaint.getFontPadding((int) Math.round(this.textBounds.getHeight()));
+
+        final int myTextWidth = (int) Math.round(this.textBounds.getWidth()) + 2 * this.fontPadding;
 
         final float boxWidth, boxHeight;
-        if (this.textWidth > this.maxTextWidth) {
+        if (myTextWidth > this.maxTextWidth) {
             // if the text is too wide its layout is done by the Android StaticLayout class,
             // which automatically inserts line breaks. There is not a whole lot of useful
             // documentation of this class.
@@ -48,8 +74,8 @@ public class AndroidPointTextContainer extends PointTextContainer {
             // and for right on the left.
             // One disadvantage is that it will always keep the text within the maxWidth,
             // even if that means breaking text mid-word.
-            // This code currently does not play that well with the LabelPlacement algorithm.
-            // The best way to disable it is to make the maxWidth really wide.
+
+            this.isMultiline = true;
 
             TextPaint frontTextPaint = new TextPaint(AndroidGraphicFactory.getPaint(this.paintFront));
             TextPaint backTextPaint = null;
@@ -57,39 +83,38 @@ public class AndroidPointTextContainer extends PointTextContainer {
                 backTextPaint = new TextPaint(AndroidGraphicFactory.getPaint(this.paintBack));
             }
 
-            Layout.Alignment alignment = Layout.Alignment.ALIGN_CENTER;
-            if (Position.LEFT == this.position
-                    || Position.BELOW_LEFT == this.position
-                    || Position.ABOVE_LEFT == this.position) {
-                alignment = Layout.Alignment.ALIGN_OPPOSITE;
-            } else if (Position.RIGHT == this.position
-                    || Position.BELOW_RIGHT == this.position
-                    || Position.ABOVE_RIGHT == this.position) {
-                alignment = Layout.Alignment.ALIGN_NORMAL;
-            }
-
             // strange Android behaviour: if alignment is set to center, then
             // text is rendered with right alignment if using StaticLayout
             frontTextPaint.setTextAlign(android.graphics.Paint.Align.LEFT);
-            if (this.paintBack != null) {
+            if (backTextPaint != null) {
                 backTextPaint.setTextAlign(android.graphics.Paint.Align.LEFT);
             }
 
-            frontLayout = new StaticLayout(this.text, frontTextPaint, this.maxTextWidth, alignment, 1, 0, false);
-            backLayout = null;
-            if (this.paintBack != null) {
-                backLayout = new StaticLayout(this.text, backTextPaint, this.maxTextWidth, alignment, 1, 0, false);
+            this.frontLayout = createTextLayout(frontTextPaint);
+            if (backTextPaint != null) {
+                this.backLayout = createTextLayout(backTextPaint);
+            } else {
+                this.backLayout = null;
             }
 
-            boxWidth = frontLayout.getWidth();
-            boxHeight = frontLayout.getHeight();
+            this.textWidth = AndroidPaint.getTextWidth(backLayout != null ? backLayout : frontLayout);
+            this.textHeight = (backLayout != null ? backLayout : frontLayout).getHeight();
+
+            boxWidth = this.textWidth + 2 * this.fontPadding;
+            boxHeight = this.textHeight + 2 * this.fontPadding;
         } else {
-            boxWidth = textWidth;
-            boxHeight = textHeight;
+            this.isMultiline = false;
+
+            this.textWidth = myTextWidth - 2 * this.fontPadding;
+            this.textHeight = (int) Math.round(this.textBounds.getHeight());
+
+            boxWidth = myTextWidth;
+            boxHeight = this.textHeight + 2 * this.fontPadding;
         }
 
         switch (this.position) {
             case CENTER:
+            default:
                 boundary = new Rectangle(-boxWidth / 2f, -boxHeight / 2f, boxWidth / 2f, boxHeight / 2f);
                 break;
             case BELOW:
@@ -116,84 +141,107 @@ public class AndroidPointTextContainer extends PointTextContainer {
             case RIGHT:
                 boundary = new Rectangle(0, -boxHeight / 2f, boxWidth, boxHeight / 2f);
                 break;
-            default:
-                break;
+        }
+
+        if (DEBUG_CLASH_BOUNDS) {
+            debugClashBoundsPaint = AndroidGraphicFactory.getPaint(AndroidGraphicFactory.INSTANCE.createPaint(measurePaint));
+            debugClashBoundsPaint.setColor(android.graphics.Color.BLACK);
+        } else {
+            debugClashBoundsPaint = null;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private StaticLayout createTextLayout(TextPaint paint) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // API29+, A10+
+            return StaticLayout.Builder
+                    .obtain(this.text, 0, this.text.length(), paint, this.maxTextWidth)
+                    .setBreakStrategy(LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
+                    .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                    .setIncludePad(true)
+                    .build();
+        } else {
+            return new StaticLayout(this.text, paint, this.maxTextWidth, Layout.Alignment.ALIGN_CENTER, 1, 0, true);
         }
     }
 
     @Override
-    public void draw(Canvas canvas, Point origin, Matrix matrix, Filter filter) {
-        if (!this.isVisible) {
+    protected Rectangle getBoundary() {
+        return boundary;
+    }
+
+    @Override
+    public void draw(Canvas canvas, Point origin, Matrix matrix, Rotation rotation) {
+        if (this.isNotVisible()) {
             return;
         }
 
         android.graphics.Canvas androidCanvas = AndroidGraphicFactory.getCanvas(canvas);
 
-        if (this.textWidth > this.maxTextWidth) {
+        final Point rotRelPosition = getRotatedRelativePosition(origin.x, origin.y, rotation);
+
+        double x = rotRelPosition.x;
+        double y = rotRelPosition.y;
+
+        if (isMultiline) {
             // in this case we draw the precomputed staticLayout onto the canvas by translating
             // the canvas.
+
             androidCanvas.save();
-            androidCanvas.translate((float) (this.xy.x - origin.x + boundary.left), (float) (this.xy.y - origin.y + boundary.top));
+
+            if (!Rotation.noRotation(rotation)) {
+                androidCanvas.rotate(-rotation.degrees, rotation.px, rotation.py);
+            }
+
+            if (DEBUG_CLASH_BOUNDS) {
+                drawClashBounds(origin.x, origin.y, rotation, androidCanvas);
+            }
+
+            x -= (this.maxTextWidth - boundary.getWidth()) / 2f;
+
+            y += fontPadding;
+
+            androidCanvas.translate((float) x, (float) y);
 
             if (this.backLayout != null) {
-                int color = this.backLayout.getPaint().getColor();
-                if (filter != Filter.NONE) {
-                    this.backLayout.getPaint().setColor(GraphicUtils.filterColor(color, filter));
-                }
                 this.backLayout.draw(androidCanvas);
-                if (filter != Filter.NONE) {
-                    this.backLayout.getPaint().setColor(color);
-                }
-            }
-            int color = this.frontLayout.getPaint().getColor();
-            if (filter != Filter.NONE) {
-                this.frontLayout.getPaint().setColor(GraphicUtils.filterColor(color, filter));
             }
             this.frontLayout.draw(androidCanvas);
-            if (filter != Filter.NONE) {
-                this.frontLayout.getPaint().setColor(color);
-            }
+
             androidCanvas.restore();
         } else {
-            // the origin of the text is the base line, so we need to make adjustments
-            // so that the text will be within its box
-            float textOffset = 0;
-            switch (this.position) {
-                case CENTER:
-                case LEFT:
-                case RIGHT:
-                    textOffset = textHeight / 2f;
-                    break;
-                case BELOW:
-                case BELOW_LEFT:
-                case BELOW_RIGHT:
-                    textOffset = textHeight;
-                    break;
-                default:
-                    break;
+            if (!Rotation.noRotation(rotation)) {
+                androidCanvas.save();
+                androidCanvas.rotate(-rotation.degrees, rotation.px, rotation.py);
             }
 
-            float adjustedX = (float) (this.xy.x - origin.x);
-            float adjustedY = (float) (this.xy.y - origin.y) + textOffset;
+            if (DEBUG_CLASH_BOUNDS) {
+                drawClashBounds(origin.x, origin.y, rotation, androidCanvas);
+            }
+
+            x += fontPadding - textBounds.left;
+
+            y += boundary.getHeight();
+            y += -fontPadding - textBounds.bottom;
 
             if (this.paintBack != null) {
-                int color = this.paintBack.getColor();
-                if (filter != Filter.NONE) {
-                    this.paintBack.setColor(GraphicUtils.filterColor(color, filter));
-                }
-                androidCanvas.drawText(this.text, adjustedX, adjustedY, AndroidGraphicFactory.getPaint(this.paintBack));
-                if (filter != Filter.NONE) {
-                    this.paintBack.setColor(color);
-                }
+                androidCanvas.drawText(this.text, (float) x, (float) y, AndroidGraphicFactory.getPaint(this.paintBack));
             }
-            int color = this.paintFront.getColor();
-            if (filter != Filter.NONE) {
-                this.paintFront.setColor(GraphicUtils.filterColor(color, filter));
+
+            androidCanvas.drawText(this.text, (float) x, (float) y, AndroidGraphicFactory.getPaint(this.paintFront));
+
+            if (!Rotation.noRotation(rotation)) {
+                androidCanvas.restore();
             }
-            androidCanvas.drawText(this.text, adjustedX, adjustedY, AndroidGraphicFactory.getPaint(this.paintFront));
-            if (filter != Filter.NONE) {
-                this.paintFront.setColor(color);
-            }
+        }
+    }
+
+    protected void drawClashBounds(double originX, double originY, Rotation rotation, android.graphics.Canvas androidCanvas) {
+        final Rectangle transformed = getClashRectangleTransformed(this, originX, originY, rotation);
+
+        if (transformed != null) {
+            androidCanvas.drawRect(new RectF((float) transformed.left, (float) transformed.top, (float) transformed.right, (float) transformed.bottom), debugClashBoundsPaint);
         }
     }
 }

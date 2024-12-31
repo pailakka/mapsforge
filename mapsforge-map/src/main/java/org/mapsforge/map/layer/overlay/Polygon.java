@@ -16,16 +16,15 @@
  */
 package org.mapsforge.map.layer.overlay;
 
-import org.mapsforge.core.graphics.Canvas;
-import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.Path;
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.util.LatLongUtils;
 import org.mapsforge.core.util.MercatorProjection;
 import org.mapsforge.map.layer.Layer;
+import org.mapsforge.map.view.MapView;
 
 import java.util.Iterator;
 import java.util.List;
@@ -37,6 +36,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <p/>
  * A {@code Polygon} holds two {@link Paint} objects to allow for different outline and filling. These paints define
  * drawing parameters such as color, stroke width, pattern and transparency.
+ * <p/>
+ * A {@code Polygon} can optionally contain one or more "holes". See method {@link #addHole(List)}} for more information and restrictions
  */
 public class Polygon extends Layer {
 
@@ -44,6 +45,7 @@ public class Polygon extends Layer {
     private final GraphicFactory graphicFactory;
     private final boolean keepAligned;
     private final List<LatLong> latLongs = new CopyOnWriteArrayList<>();
+    private List<List<LatLong>> holes; //optional, lazy-initialized for better performance
     private Paint paintFill;
     private Paint paintStroke;
 
@@ -81,17 +83,53 @@ public class Polygon extends Layer {
         updatePoints();
     }
 
+    /**
+     * Adds a hole to this polygon.
+     * <p>
+     * A polygon can contain multiple holes. Each hole must be completely inside the polygon.
+     * Holes may not overlap. All hole's winding must be the opposite of the winding of the outer polygon
+     * (e.g. if outer polygon's points are in counter-clockwise order, then the points of each hole must be in
+     * clockwise order; and vice versa).
+     *
+     * @param holePoints path of the hole. If first and last point are not equal, path will be closed automatically
+     */
+    public synchronized void addHole(List<LatLong> holePoints) {
+        if (this.holes == null) {
+            this.holes = new CopyOnWriteArrayList<>();
+        }
+        this.holes.add(new CopyOnWriteArrayList<>(holePoints));
+    }
+
     public synchronized void clear() {
         this.latLongs.clear();
+        if (this.holes != null) {
+            this.holes.clear();
+        }
         updatePoints();
     }
 
-    public synchronized boolean contains(LatLong tapLatLong) {
-        return LatLongUtils.contains(latLongs, tapLatLong);
+    public synchronized boolean contains(Point tapXY, MapView mapView) {
+        tapXY = tapXY.offset(-mapView.getOffsetX(), -mapView.getOffsetY());
+        if (!Rotation.noRotation(mapView.getMapRotation())) {
+            tapXY = mapView.getMapRotation().rotate(tapXY);
+        }
+        LatLong tapLatLong = mapView.getMapViewProjection().fromPixels(tapXY.x, tapXY.y);
+        final boolean contains = LatLongUtils.contains(latLongs, tapLatLong);
+        if (holes == null || !contains) {
+            return contains;
+        }
+
+        for (List<LatLong> hole : this.holes) {
+            if (LatLongUtils.contains(hole, tapLatLong)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Override
-    public synchronized void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint) {
+    public synchronized void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint, Rotation rotation) {
         if (this.latLongs.size() < 2 || (this.paintStroke == null && this.paintFill == null)) {
             return;
         }
@@ -100,22 +138,17 @@ public class Polygon extends Layer {
             return;
         }
 
-        Iterator<LatLong> iterator = this.latLongs.iterator();
-
         Path path = this.graphicFactory.createPath();
-        LatLong latLong = iterator.next();
         long mapSize = MercatorProjection.getMapSize(zoomLevel, displayModel.getTileSize());
-        float x = (float) (MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize) - topLeftPoint.x);
-        float y = (float) (MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize) - topLeftPoint.y);
-        path.moveTo(x, y);
 
-        while (iterator.hasNext()) {
-            latLong = iterator.next();
-            x = (float) (MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize) - topLeftPoint.x);
-            y = (float) (MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize) - topLeftPoint.y);
-            path.lineTo(x, y);
+        addToPath(path, this.latLongs, mapSize, topLeftPoint);
+
+        if (this.holes != null && !this.holes.isEmpty()) {
+            path.setFillRule(FillRule.EVEN_ODD);
+            for (List<LatLong> hole : holes) {
+                addToPath(path, hole, mapSize, topLeftPoint);
+            }
         }
-
 
         if (this.paintStroke != null) {
             if (this.keepAligned) {
@@ -131,6 +164,23 @@ public class Polygon extends Layer {
             canvas.drawPath(path, this.paintFill);
         }
     }
+
+    private static void addToPath(Path path, List<LatLong> points, long mapSize, Point topLeftPoint) {
+        final Iterator<LatLong> iterator = points.iterator();
+        LatLong latLong = iterator.next();
+        float x = (float) (MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize) - topLeftPoint.x);
+        float y = (float) (MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize) - topLeftPoint.y);
+        path.moveTo(x, y);
+
+        while (iterator.hasNext()) {
+            latLong = iterator.next();
+            x = (float) (MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize) - topLeftPoint.x);
+            y = (float) (MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize) - topLeftPoint.y);
+            path.lineTo(x, y);
+        }
+        path.close();
+    }
+
 
     /**
      * @return a thread-safe list of LatLongs in this polygon.

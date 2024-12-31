@@ -15,7 +15,6 @@
 package org.mapsforge.samples.android;
 
 import android.graphics.BitmapFactory;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
@@ -23,6 +22,7 @@ import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.model.BoundingBox;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.map.android.graphics.AndroidBitmap;
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory;
 import org.mapsforge.map.layer.GroupLayer;
@@ -40,6 +40,7 @@ import java.util.Collection;
  * Long press on map to search inside visible bounding box.<br/>
  * Tap on POIs to show their name (in default locale).
  */
+@SuppressWarnings("deprecation")
 public class PoiSearchViewer extends DefaultTheme {
 
     private static final String POI_FILE = "berlin.poi";
@@ -72,7 +73,7 @@ public class PoiSearchViewer extends DefaultTheme {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        persistenceManager = AndroidPoiPersistenceManagerFactory.getPoiPersistenceManager(new File(getExternalFilesDir(null), POI_FILE).getAbsolutePath());
+        persistenceManager = AndroidPoiPersistenceManagerFactory.getPoiPersistenceManager(new File(getExternalMediaDirs()[0], POI_FILE).getAbsolutePath());
     }
 
     @Override
@@ -82,7 +83,7 @@ public class PoiSearchViewer extends DefaultTheme {
         super.onDestroy();
     }
 
-    private class PoiSearchTask extends AsyncTask<BoundingBox, Void, Collection<PointOfInterest>> {
+    private class PoiSearchTask extends android.os.AsyncTask<BoundingBox, Void, Collection<PointOfInterest>> {
         private final WeakReference<PoiSearchViewer> weakActivity;
         private final String category;
 
@@ -98,9 +99,9 @@ public class PoiSearchViewer extends DefaultTheme {
                 PoiCategoryManager categoryManager = persistenceManager.getCategoryManager();
                 PoiCategoryFilter categoryFilter = new ExactMatchPoiCategoryFilter();
                 categoryFilter.addCategory(categoryManager.getPoiCategoryByTitle(category));
-                return persistenceManager.findInRect(params[0], categoryFilter, null, Integer.MAX_VALUE);
+                return persistenceManager.findInRect(params[0], categoryFilter, null, null, Integer.MAX_VALUE, true);
             } catch (Throwable t) {
-                Log.e(SamplesApplication.TAG, t.getMessage(), t);
+                Log.e(SamplesApplication.TAG, t.toString(), t);
             }
             return null;
         }
@@ -140,7 +141,10 @@ public class PoiSearchViewer extends DefaultTheme {
         public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
             // GroupLayer does not have a position, layerXY is null
             layerXY = mapView.getMapViewProjection().toPixels(getPosition());
-            if (contains(layerXY, tapXY)) {
+            if (!Rotation.noRotation(mapView.getMapRotation()) && layerXY != null) {
+                layerXY = mapView.getMapRotation().rotate(layerXY, true);
+            }
+            if (contains(layerXY, tapXY, mapView)) {
                 Toast.makeText(PoiSearchViewer.this, pointOfInterest.getName(), Toast.LENGTH_SHORT).show();
                 return true;
             }

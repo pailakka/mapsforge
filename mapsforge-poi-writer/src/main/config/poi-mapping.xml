@@ -33,6 +33,7 @@
                 <mapping tag="amenity=cafe" />
             </category>
             <category title="Beer gardens">
+                <mapping tag="amenity=biergarten" />
                 <mapping tag="amenity=beer_garden" />
             </category>
             <category title="Ice cream shops">
@@ -85,8 +86,11 @@
             <!--<category title="Containers holding a mixture of salt and grit">
                 <mapping tag="amenity=grit_bin" />
             </category>-->
-            <category title="Car parks">
+            <category title="Car parking places">
                 <mapping tag="amenity=parking" />
+            </category>
+            <category title="Motorcycle parking places">
+                <mapping tag="amenity=motorcycle_parking" />
             </category>
             <!--<category title="A single parking space">
                 <mapping tag="amenity=parking_space" />
@@ -173,9 +177,9 @@
             </category>
         </category>
         <category title="Other amenities">
-            <category title="Public benches">
+            <!--<category title="Public benches">
                 <mapping tag="amenity=bench" />
-            </category>
+            </category>-->
             <!-- Why not.. -->
             <category title="Brothels">
                 <mapping tag="amenity=brothel" />
@@ -216,7 +220,7 @@
             <category title="Post offices">
                 <mapping tag="amenity=post_office" />
             </category>
-            <category title="Prisons (not including schools)">
+            <category title="Prisons">
                 <mapping tag="amenity=prison" />
             </category>
             <!-- Not enough -->
@@ -386,7 +390,7 @@
             <mapping tag="craft=brewery" />
         </category>
         <category title="Boat builders">
-            <mapping tag="craft=boat builders" />
+            <mapping tag="craft=boatbuilder" />
         </category>
         <category title="Bonfires">
             <mapping tag="craft=bonfire" />
@@ -414,9 +418,6 @@
         </category>
         <category title="Electricians">
             <mapping tag="craft=electrician" />
-        </category>
-        <category title="Falleses">
-            <mapping tag="craft=falles" />
         </category>
         <category title="Gardeners">
             <mapping tag="craft=gardener" />
@@ -580,24 +581,21 @@
         <!--<category title="Mini roundabouts">
             <mapping tag="highway=mini_roundabout" />
         </category>-->
-        <category title="Motorway junctions">
+        <!--<category title="Motorway junctions">
             <mapping tag="highway=motorway_junction" />
-        </category>
+        </category>-->
         <!--<category title="Passing spaces">
             <mapping tag="highway=passing_place" />
         </category>-->
         <category title="Rest areas">
             <mapping tag="highway=rest_area" />
         </category>
-        <!--<category title="Speed cameras">
+        <category title="Speed cameras">
             <mapping tag="highway=speed_camera" />
-        </category>-->
+        </category>
         <!--<category title="Street lamps">
             <mapping tag="highway=street_lamp" />
         </category>-->
-        <category title="Service stations">
-            <mapping tag="highway=services" />
-        </category>
         <!--<category title="Stop signs">
             <mapping tag="highway=stop" />
         </category>-->
@@ -627,9 +625,9 @@
         <!--<category title="Footway">
             <mapping tag="highway=footway" />
         </category>-->
-        <category title="Living street">
+        <!--<category title="Living street">
             <mapping tag="highway=living_street" />
-        </category>
+        </category>-->
         <!--<category title="Motorway">
             <mapping tag="highway=motorway" />
         </category>-->
@@ -651,12 +649,12 @@
         <!--<category title="Raceway">
             <mapping tag="highway=raceway" />
         </category>-->
-        <category title="Residential way">
+        <!--<category title="Residential way">
             <mapping tag="highway=residential" />
-        </category>
-        <category title="Road">
+        </category>-->
+        <!--<category title="Road">
             <mapping tag="highway=road" />
-        </category>
+        </category>-->
         <!--<category title="Secondary way">
             <mapping tag="highway=secondary" />
         </category>-->
@@ -665,9 +663,6 @@
         </category>-->
         <!--<category title="Service way">
             <mapping tag="highway=service" />
-        </category>-->
-        <!--<category title="Services way">
-            <mapping tag="highway=services" />
         </category>-->
         <!--<category title="Steps way">
             <mapping tag="highway=steps" />
@@ -681,9 +676,9 @@
         <!--<category title="Track way">
             <mapping tag="highway=track" />
         </category>-->
-        <category title="Trunk way">
+        <!--<category title="Trunk way">
             <mapping tag="highway=trunk" />
-        </category>
+        </category>-->
         <!--<category title="Trunk way link">
             <mapping tag="highway=trunk_link" />
         </category>-->
@@ -695,7 +690,7 @@
     <!-- Historic -->
     <category title="Historic">
         <category title="Archaeological sites">
-            <mapping tag="historic=archaeological" />
+            <mapping tag="historic=archaeological_site" />
         </category>
         <category title="Battlefields">
             <mapping tag="historic=battlefield" />
@@ -823,7 +818,7 @@
             <mapping tag="man_made=monitoring_station" />
         </category>-->
         <category title="Petroleum wells">
-            <mapping tag="man_made=petroleum_wells" />
+            <mapping tag="man_made=petroleum_well" />
         </category>
         <category title="Covered water reservoirs">
             <mapping tag="man_made=reservoir_covered" />
@@ -872,7 +867,7 @@
     <!-- Military -->
     <category title="Military">
         <category title="Military Airfields">
-            <mapping tag="military=airfields" />
+            <mapping tag="military=airfield" />
         </category>
         <category title="Bunkers">
             <mapping tag="military=bunker" />
@@ -895,6 +890,9 @@
     <category title="Natural">
         <category title="Peak">
             <mapping tag="natural=peak" />
+        </category>
+        <category title="Mountain pass">
+            <mapping tag="mountain_pass=yes" />
         </category>
         <category title="Volcano">
             <mapping tag="natural=volcano" />
@@ -1197,6 +1195,7 @@
         </category>
         <category title="Motorcycles">
             <mapping tag="shop=motorcycle" />
+            <mapping tag="shop=motorcycle_repair" />
         </category>
         <category title="Musical instruments">
             <mapping tag="shop=musical_instrument" />
@@ -1214,7 +1213,7 @@
             <mapping tag="shop=outdoor" />
         </category>
         <category title="Paints">
-            <mapping tag="shop=paints" />
+            <mapping tag="shop=paint" />
         </category>
         <category title="Pawnbrokers">
             <mapping tag="shop=pawnbroker" />
@@ -1459,7 +1458,7 @@
             <mapping tag="tourism=attraction" />
         </category>
         <category title="Artworks">
-            <mapping tag="tourism=artworks" />
+            <mapping tag="tourism=artwork" />
         </category>
         <category title="Camp sites">
             <mapping tag="tourism=camp_site" />
@@ -1547,9 +1546,9 @@
     </category>
 
     <!-- Address search -->
-    <category title="Address">
+    <!--<category title="Address">
         <mapping tag="addr:street" />
         <mapping tag="addr:housenumber" />
-    </category>
+    </category>-->
 
 </category>

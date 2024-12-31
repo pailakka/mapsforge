@@ -15,11 +15,7 @@
 package org.mapsforge.samples.android;
 
 import android.app.AlertDialog;
-
-import org.mapsforge.core.model.LatLong;
-import org.mapsforge.core.model.Point;
-import org.mapsforge.core.model.Tag;
-import org.mapsforge.core.model.Tile;
+import org.mapsforge.core.model.*;
 import org.mapsforge.core.util.LatLongUtils;
 import org.mapsforge.core.util.MercatorProjection;
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory;
@@ -81,12 +77,16 @@ public class ReverseGeocodeViewer extends DefaultTheme {
         sb.append("*** POI ***");
         for (PointOfInterest pointOfInterest : mapReadResult.pointOfInterests) {
             Point layerXY = this.mapView.getMapViewProjection().toPixels(pointOfInterest.position);
+            if (!Rotation.noRotation(this.mapView.getMapRotation()) && layerXY != null) {
+                layerXY = this.mapView.getMapRotation().rotate(layerXY, true);
+            }
             if (layerXY.distance(tapXY) > touchRadius) {
                 continue;
             }
             sb.append("\n");
             List<Tag> tags = pointOfInterest.tags;
-            for (Tag tag : tags) {
+            for (int i = 0, n = tags.size(); i < n; i++) {
+                Tag tag = tags.get(i);
                 sb.append("\n").append(tag.key).append("=").append(tag.value);
             }
         }
@@ -100,7 +100,8 @@ public class ReverseGeocodeViewer extends DefaultTheme {
             }
             sb.append("\n");
             List<Tag> tags = way.tags;
-            for (Tag tag : tags) {
+            for (int i = 0, n = tags.size(); i < n; i++) {
+                Tag tag = tags.get(i);
                 sb.append("\n").append(tag.key).append("=").append(tag.value);
             }
         }

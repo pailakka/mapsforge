@@ -21,12 +21,14 @@ import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.graphics.Display;
 import org.mapsforge.core.graphics.GraphicFactory;
 import org.mapsforge.core.graphics.Position;
+import org.mapsforge.core.graphics.SymbolOrientation;
 import org.mapsforge.core.model.Rectangle;
 import org.mapsforge.map.datastore.PointOfInterest;
 import org.mapsforge.map.layer.renderer.PolylineContainer;
 import org.mapsforge.map.model.DisplayModel;
 import org.mapsforge.map.rendertheme.RenderCallback;
 import org.mapsforge.map.rendertheme.RenderContext;
+import org.mapsforge.map.rendertheme.XmlThemeResourceProvider;
 import org.mapsforge.map.rendertheme.XmlUtils;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -53,31 +55,38 @@ public class LineSymbol extends RenderInstruction {
     private boolean repeat;
     private float repeatGap;
     private float repeatStart;
-    private boolean rotate;
+    private final XmlThemeResourceProvider resourceProvider;
     private Scale scale = Scale.STROKE;
     private String src;
+    private SymbolOrientation symbolOrientation;
+
+    private final Object mySync = new Object();
 
     public LineSymbol(GraphicFactory graphicFactory, DisplayModel displayModel, String elementName,
-                      XmlPullParser pullParser, String relativePathPrefix) throws IOException, XmlPullParserException {
+                      XmlPullParser pullParser, String relativePathPrefix, XmlThemeResourceProvider resourceProvider) throws IOException, XmlPullParserException {
         super(graphicFactory, displayModel);
 
         this.display = Display.IFSPACE;
-        this.rotate = true;
         this.relativePathPrefix = relativePathPrefix;
+        this.resourceProvider = resourceProvider;
         this.dyScaled = new HashMap<>();
         // Probably not a good default, but backwards compatible
         this.position = Position.BELOW_RIGHT;
+        this.symbolOrientation = SymbolOrientation.LEFT;
 
         extractValues(elementName, pullParser);
     }
 
     @Override
     public void destroy() {
-        if (this.bitmap != null) {
-            this.bitmap.decrementRefCount();
+        synchronized (mySync) {
+            if (this.bitmap != null) {
+                this.bitmap.decrementRefCount();
+            }
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void extractValues(String elementName, XmlPullParser pullParser) throws IOException, XmlPullParserException {
         this.repeatGap = REPEAT_GAP_DEFAULT * displayModel.getScaleFactor();
         this.repeatStart = REPEAT_START_DEFAULT * displayModel.getScaleFactor();
@@ -109,11 +118,15 @@ public class LineSymbol extends RenderInstruction {
             } else if (REPEAT_START.equals(name)) {
                 this.repeatStart = Float.parseFloat(value) * displayModel.getScaleFactor();
             } else if (ROTATE.equals(name)) {
-                this.rotate = Boolean.parseBoolean(value);
+                if (!Boolean.parseBoolean(value)) {
+                    this.symbolOrientation = SymbolOrientation.UP;
+                }
             } else if (SCALE.equals(name)) {
                 this.scale = scaleFromValue(value);
             } else if (SYMBOL_HEIGHT.equals(name)) {
                 this.height = XmlUtils.parseNonNegativeInteger(name, value) * displayModel.getScaleFactor();
+            } else if (SYMBOL_ORIENTATION.equals(name)) {
+                this.symbolOrientation = SymbolOrientation.fromString(value);
             } else if (SYMBOL_PERCENT.equals(name)) {
                 this.percent = XmlUtils.parseNonNegativeInteger(name, value);
             } else if (SYMBOL_SCALING.equals(name)) {
@@ -123,7 +136,7 @@ public class LineSymbol extends RenderInstruction {
             } else if (POSITION.equals(name)) {
                 this.position = Position.fromString(value);
             } else {
-                throw XmlUtils.createXmlPullParserException(elementName, name, value, i);
+                XmlUtils.logUnknownAttribute(elementName, name, value, i);
             }
         }
     }
@@ -139,32 +152,36 @@ public class LineSymbol extends RenderInstruction {
             return;
         }
 
-        if (this.bitmap == null && !this.bitmapInvalid) {
-            try {
-                this.bitmap = createBitmap(relativePathPrefix, src);
-            } catch (IOException ioException) {
-                this.bitmapInvalid = true;
+        synchronized (mySync) {
+            if (this.bitmap == null && !this.bitmapInvalid) {
+                try {
+                    this.bitmap = createBitmap(relativePathPrefix, src, resourceProvider);
+                } catch (IOException ioException) {
+                    this.bitmapInvalid = true;
+                }
             }
-        }
 
-        Float dyScale = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
-        if (dyScale == null) {
-            dyScale = this.dy;
-        }
+            Float dyScale = this.dyScaled.get(renderContext.rendererJob.tile.zoomLevel);
+            if (dyScale == null) {
+                dyScale = this.dy;
+            }
 
-        if (this.bitmap != null) {
-            Rectangle boundary = computeBoundary(this.bitmap.getWidth(), this.bitmap.getHeight(), this.position);
-            renderCallback.renderWaySymbol(renderContext, this.display, this.priority, this.bitmap, dyScale, boundary,
-                    this.repeat, this.repeatGap, this.repeatStart, this.rotate, way);
+            if (this.bitmap != null) {
+                Rectangle boundary = computeBoundary(this.bitmap.getWidth(), this.bitmap.getHeight(), this.position);
+                renderCallback.renderWaySymbol(renderContext, this.display, this.priority, this.bitmap, dyScale, boundary,
+                        this.repeat, this.repeatGap, this.repeatStart, this.symbolOrientation, way);
+            }
         }
     }
 
     @Override
     public void scaleStrokeWidth(float scaleFactor, byte zoomLevel) {
-        if (this.scale == Scale.NONE) {
-            scaleFactor = 1;
+        synchronized (mySync) {
+            if (this.scale == Scale.NONE) {
+                scaleFactor = 1;
+            }
+            this.dyScaled.put(zoomLevel, this.dy * scaleFactor);
         }
-        this.dyScaled.put(zoomLevel, this.dy * scaleFactor);
     }
 
     @Override

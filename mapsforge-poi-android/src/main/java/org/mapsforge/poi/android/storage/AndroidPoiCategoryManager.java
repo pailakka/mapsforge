@@ -17,13 +17,8 @@
 package org.mapsforge.poi.android.storage;
 
 import android.database.Cursor;
-
-import org.mapsforge.poi.storage.AbstractPoiCategoryManager;
-import org.mapsforge.poi.storage.DoubleLinkedPoiCategory;
-import org.mapsforge.poi.storage.PoiCategory;
-import org.mapsforge.poi.storage.PoiCategoryManager;
-import org.mapsforge.poi.storage.UnknownPoiCategoryException;
-import org.sqlite.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDatabase;
+import org.mapsforge.poi.storage.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -48,7 +43,7 @@ class AndroidPoiCategoryManager extends AbstractPoiCategoryManager {
         try {
             loadCategories(db);
         } catch (UnknownPoiCategoryException e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         }
     }
 
@@ -85,14 +80,14 @@ class AndroidPoiCategoryManager extends AbstractPoiCategoryManager {
                 }
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
         } finally {
             try {
                 if (cursor != null) {
                     cursor.close();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, e.toString(), e);
             }
         }
 

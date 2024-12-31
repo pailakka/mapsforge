@@ -1,5 +1,6 @@
 /*
  * Copyright 2017 usrusr
+ * Copyright 2024 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -14,36 +15,40 @@
  */
 package org.mapsforge.map.layer.hills;
 
+import org.mapsforge.core.util.IOUtils;
 import org.mapsforge.core.util.MercatorProjection;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
+import java.io.InputStream;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * simulates diffuse lighting (without self-shadowing) except for scaling the light values below horizontal and above horizontal
- * differently so that both make full use of the available dynamic range while maintinging horizontal neutral identical to {@link SimpleShadingAlgorithm}
- * and to the standard neutral value that is filled in when there is no hillshading but the always-option is set to true in the theme.
+ * <p>
+ * Simulates diffuse lighting to some degree, while leaving horizontal surfaces unshaded (desired property).
+ * Note: For better results and greater flexibility consider using the newer algorithms, e.g. {@link AdaptiveClasyHillShading}, {@link StandardClasyHillShading} or {@link HiResClasyHillShading}.
+ * </p>
+ * <em>(2024) The original description from 2017, which is no longer entirely accurate:</em>
+ * Simulates diffuse lighting (without self-shadowing) except for scaling the light values below horizontal and above horizontal
+ * differently so that both make full use of the available dynamic range while maintaining horizontal neutral identical to {@link SimpleShadingAlgorithm}
+ * and to the standard neutral value that is filled in when there is no hill shading but the always-option is set to true in the theme.
  * <p>
  * <p>More accurate than {@link SimpleShadingAlgorithm}, but maybe not as useful for visualizing both softly rolling hills and dramatic mountain ranges at the same time.</p>
+ *
+ * @see AdaptiveClasyHillShading
+ * @see HiResClasyHillShading
+ * @see StandardClasyHillShading
+ * @see HalfResClasyHillShading
+ * @see QuarterResClasyHillShading
  */
-public class DiffuseLightShadingAlgorithm implements ShadingAlgorithm {
+public class DiffuseLightShadingAlgorithm extends AShadingAlgorithm {
 
-    private static final Logger LOGGER = Logger.getLogger(DiffuseLightShadingAlgorithm.class.getName());
-    private static final double halfPi = Math.PI / 2d;
-    private final float heightAngle;
-    private final double ast2;
-    private final double neutral;
+    protected final float heightAngle;
+    protected final double ast2;
+    protected final double neutral;
     /**
      * light height (relative to 1:1:x)
      */
-    private double a;
+    protected double a;
 
     public DiffuseLightShadingAlgorithm() {
         this(50f);
@@ -59,17 +64,10 @@ public class DiffuseLightShadingAlgorithm implements ShadingAlgorithm {
         neutral = calculateRaw(0, 0);
     }
 
-    static double heightAngleToRelativeHeight(float heightAngle) {
+    protected static double heightAngleToRelativeHeight(float heightAngle) {
         double radians = heightAngle / 180d * Math.PI;
 
         return Math.tan(radians) * Math.sqrt(2d);
-    }
-
-    private static short readNext(ByteBuffer din, short fallback) throws IOException {
-        short read = din.getShort();
-        if (read == Short.MIN_VALUE)
-            return fallback;
-        return read;
     }
 
     public double getLightHeight() {
@@ -77,53 +75,36 @@ public class DiffuseLightShadingAlgorithm implements ShadingAlgorithm {
     }
 
     @Override
-    public int getAxisLenght(HgtCache.HgtFileInfo source) {
-        long size = source.getSize();
-        long elements = size / 2;
-        int rowLen = (int) Math.ceil(Math.sqrt(elements));
-        if (rowLen * rowLen * 2 != size) {
-            return 0;
-        }
-        return rowLen - 1;
-    }
+    public RawShadingResult transformToByteBuffer(HgtFileInfo source, int padding, int zoomLevel, double pxPerLat, double pxPerLon) {
+        final int axisLength = getOutputAxisLen(source, zoomLevel, pxPerLat, pxPerLon);
+        final int rowLen = axisLength + 1;
 
-    @Override
-    public RawShadingResult transformToByteBuffer(HgtCache.HgtFileInfo source, int padding) {
-        int axisLength = getAxisLenght(source);
-        int rowLen = axisLength + 1;
-        FileInputStream stream = null;
-        FileChannel channel = null;
+        InputStream map = null;
         try {
-            File file = source.getFile();
-            stream = new FileInputStream(file);
-            channel = stream.getChannel();
-            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length());
-            map.order(ByteOrder.BIG_ENDIAN);
-            byte[] bytes = convert(map, axisLength, rowLen, padding, source);
+            map = source
+                    .getFile()
+                    .asStream();
 
+            final byte[] bytes;
+            if (map != null) {
+                bytes = convert(map, axisLength, rowLen, padding, zoomLevel, pxPerLat, pxPerLon, source);
+            } else {
+                // If stream could not be opened, simply return zeros
+                final int bitmapWidth = axisLength + 2 * padding;
+                bytes = new byte[bitmapWidth * bitmapWidth];
+            }
             return new RawShadingResult(bytes, axisLength, axisLength, padding);
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, e.toString(), e);
             return null;
         } finally {
-            if (channel != null) try {
-                channel.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            if (stream != null) try {
-                stream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            IOUtils.closeQuietly(map);
         }
     }
 
-    private byte[] convert(MappedByteBuffer din, int axisLength, int rowLen, int padding, HgtCache.HgtFileInfo fileInfo) throws IOException {
-        byte[] bytes;
-
-        short[] ringbuffer = new short[rowLen];
-        bytes = new byte[(axisLength + 2 * padding) * (axisLength + 2 * padding)];
+    protected byte[] convert(InputStream din, int axisLength, int rowLen, int padding, int zoomLevel, double pxPerLat, double pxPerLon, HgtFileInfo fileInfo) throws IOException {
+        final byte[] bytes = new byte[(axisLength + 2 * padding) * (axisLength + 2 * padding)];
+        final short[] ringbuffer = new short[rowLen];
 
         int outidx = (axisLength + 2 * padding) * padding + padding;
         int rbcur = 0;
@@ -135,63 +116,53 @@ public class DiffuseLightShadingAlgorithm implements ShadingAlgorithm {
             }
         }
 
-        double southPerPixel = MercatorProjection.calculateGroundResolution(fileInfo.southLat(), axisLength * 170);
-        double northPerPixel = MercatorProjection.calculateGroundResolution(fileInfo.northLat(), axisLength * 170);
+        final double southPerPixel = MercatorProjection.calculateGroundResolution(fileInfo.southLat(), axisLength * 170L);
+        final double northPerPixel = MercatorProjection.calculateGroundResolution(fileInfo.northLat(), axisLength * 170L);
 
-        double southPerPixelByLine = southPerPixel / (2 * axisLength);
-        double northPerPixelByLine = northPerPixel / (2 * axisLength);
+        final double southPerPixelByLine = southPerPixel / (2 * axisLength);
+        final double northPerPixelByLine = northPerPixel / (2 * axisLength);
 
         for (int line = 1; line <= axisLength; line++) {
             if (rbcur >= rowLen) {
                 rbcur = 0;
             }
+
             short nw = ringbuffer[rbcur];
             short sw = readNext(din, nw);
             ringbuffer[rbcur++] = sw;
-            double halfmetersPerPixel = (southPerPixelByLine * line + northPerPixelByLine * (axisLength - line));
+
+            final double halfmetersPerPixel = (southPerPixelByLine * line + northPerPixelByLine * (axisLength - line));
+
             for (int col = 1; col <= axisLength; col++) {
-                short ne = ringbuffer[rbcur];
-                short se = readNext(din, ne);
+                final short ne = ringbuffer[rbcur];
+                final short se = readNext(din, ne);
                 ringbuffer[rbcur++] = se;
 
-                int noso = -((se - ne) + (sw - nw));
+                final int noso = (se - ne) + (sw - nw);
+                final int eawe = (ne - nw) + (se - sw);
 
-                int eawe = -((ne - nw) + (se - sw));
-
-                int zeroIsFlat = calculate(noso / halfmetersPerPixel, eawe / halfmetersPerPixel);
-
-                int intVal = Math.min(255, Math.max(0, zeroIsFlat + 127));
-
-                int shade = intVal & 0xFF;
-
-                bytes[outidx++] = (byte) shade;
+                bytes[outidx++] = calculate(noso / halfmetersPerPixel, eawe / halfmetersPerPixel);
 
                 nw = ne;
                 sw = se;
             }
+
             outidx += 2 * padding;
         }
+
         return bytes;
     }
 
-    int calculate(double n, double e) {
-        double raw = calculateRaw(n, e);
+    protected byte calculate(double n, double e) {
+        final double raw = calculateRaw(n, e);
 
-        double v = raw - neutral;
-
-        if (v < 0) {
-            return (int) Math.round((128 * (v / neutral)));
-        } else if (v > 0) {
-            return (int) Math.round((127 * (v / (1d - neutral))));
-        } else {
-            return 0;
-        }
+        return (byte) Math.min(255, Math.round(255 * Math.abs(raw - neutral)));
     }
 
     /**
      * return 0..1
      */
-    double calculateRaw(double n, double e) {
+    protected double calculateRaw(double n, double e) {
         // calculate the distance of the normal vector to a plane orthogonal to the light source and passing through zero,
         // the fraction of distance to vector lenght is proportional to the amount of light that would be hitting a disc
         // orthogonal to the normal vector

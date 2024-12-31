@@ -19,7 +19,9 @@ package org.mapsforge.map.util;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.core.model.MapPosition;
 import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.util.MercatorProjection;
+import org.mapsforge.core.util.Parameters;
 import org.mapsforge.map.view.MapView;
 
 public class MapViewProjection {
@@ -52,7 +54,12 @@ public class MapViewProjection {
 
         // calculate the pixel coordinates of the top left corner
         LatLong latLong = mapPosition.latLong;
-        long mapSize = MercatorProjection.getMapSize(mapPosition.zoomLevel, this.mapView.getModel().displayModel.getTileSize());
+        long mapSize;
+        if (Parameters.FRACTIONAL_ZOOM) {
+            mapSize = MercatorProjection.getMapSizeWithScaleFactor(this.mapView.getModel().mapViewPosition.getScaleFactor(), this.mapView.getModel().displayModel.getTileSize());
+        } else {
+            mapSize = MercatorProjection.getMapSize(mapPosition.zoomLevel, this.mapView.getModel().displayModel.getTileSize());
+        }
         double pixelX = MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize);
         double pixelY = MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize);
         pixelX -= this.mapView.getWidth() >> 1;
@@ -116,7 +123,12 @@ public class MapViewProjection {
 
         // calculate the pixel coordinates of the top left corner
         LatLong latLong = mapPosition.latLong;
-        long mapSize = MercatorProjection.getMapSize(mapPosition.zoomLevel, this.mapView.getModel().displayModel.getTileSize());
+        long mapSize;
+        if (Parameters.FRACTIONAL_ZOOM) {
+            mapSize = MercatorProjection.getMapSizeWithScaleFactor(this.mapView.getModel().mapViewPosition.getScaleFactor(), this.mapView.getModel().displayModel.getTileSize());
+        } else {
+            mapSize = MercatorProjection.getMapSize(mapPosition.zoomLevel, this.mapView.getModel().displayModel.getTileSize());
+        }
         double pixelX = MercatorProjection.longitudeToPixelX(latLong.longitude, mapSize);
         double pixelY = MercatorProjection.latitudeToPixelY(latLong.latitude, mapSize);
         pixelX -= this.mapView.getWidth() >> 1;
@@ -128,4 +140,22 @@ public class MapViewProjection {
                 (int) (MercatorProjection.latitudeToPixelY(in.latitude, mapSize) - pixelY));
     }
 
+    /**
+     * Converts geographic coordinates to view x/y coordinates in the map view.
+     * Optionally using the map rotation and map view center.
+     *
+     * @param in           the geographic coordinates
+     * @param withRotation post process with map rotation and map view center
+     * @return x/y view coordinates for the given location
+     */
+    public Point toPixels(LatLong in, boolean withRotation) {
+        Point point = toPixels(in);
+        if (point != null && withRotation) {
+            if (!Rotation.noRotation(this.mapView.getMapRotation())) {
+                point = this.mapView.getMapRotation().rotate(point, true);
+            }
+            point = point.offset(this.mapView.getOffsetX(), this.mapView.getOffsetY());
+        }
+        return point;
+    }
 }

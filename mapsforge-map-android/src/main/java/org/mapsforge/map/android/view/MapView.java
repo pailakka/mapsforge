@@ -1,9 +1,10 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2014-2019 devemux86
+ * Copyright 2014-2022 devemux86
  * Copyright 2015 Andreas Schildbach
  * Copyright 2018 mikes222
+ * Copyright 2020 Lukas Bai
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -26,10 +27,7 @@ import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.*;
 import org.mapsforge.core.graphics.GraphicFactory;
-import org.mapsforge.core.model.BoundingBox;
-import org.mapsforge.core.model.Dimension;
-import org.mapsforge.core.model.LatLong;
-import org.mapsforge.core.model.Point;
+import org.mapsforge.core.model.*;
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory;
 import org.mapsforge.map.android.input.MapZoomControls;
 import org.mapsforge.map.android.input.TouchGestureHandler;
@@ -49,7 +47,7 @@ import org.mapsforge.map.util.MapPositionUtil;
 import org.mapsforge.map.util.MapViewProjection;
 import org.mapsforge.map.view.FpsCounter;
 import org.mapsforge.map.view.FrameBuffer;
-import org.mapsforge.map.view.FrameBufferHA2;
+import org.mapsforge.map.view.FrameBufferHA3;
 import org.mapsforge.map.view.InputListener;
 
 import java.util.List;
@@ -112,7 +110,7 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
     private GestureDetector gestureDetectorExternal;
     private final List<InputListener> inputListeners = new CopyOnWriteArrayList<>();
     private final LayerManager layerManager;
-    private final Handler layoutHandler = new Handler();
+    private final Handler layoutHandler = new Handler(Looper.myLooper());
     private MapScaleBar mapScaleBar;
     private final MapViewProjection mapViewProjection;
     private final MapZoomControls mapZoomControls;
@@ -138,7 +136,9 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
         this.model = new Model();
 
         this.fpsCounter = new FpsCounter(GRAPHIC_FACTORY, this.model.displayModel);
-        this.frameBuffer = new FrameBufferHA2(this.model.frameBufferModel, this.model.displayModel, GRAPHIC_FACTORY);
+
+        this.frameBuffer = new FrameBufferHA3(this.model.frameBufferModel, this.model.displayModel, GRAPHIC_FACTORY);
+
         this.frameBufferController = FrameBufferController.create(this.frameBuffer, this.model);
 
         this.layerManager = new LayerManager(this, this.model.mapViewPosition, GRAPHIC_FACTORY);
@@ -236,8 +236,8 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
 
     @Override
     public BoundingBox getBoundingBox() {
-        return MapPositionUtil.getBoundingBox(this.model.mapViewPosition.getMapPosition(),
-                getDimension(), this.model.displayModel.getTileSize());
+        return MapPositionUtil.getBoundingBox(this.model.mapViewPosition.getMapPosition(), getMapRotation(),
+                this.model.displayModel.getTileSize(), getDimension(), getMapViewCenterX(), getMapViewCenterY());
     }
 
     @Override
@@ -261,8 +261,23 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
     }
 
     @Override
+    public Rotation getMapRotation() {
+        return this.getModel().mapViewPosition.getRotation();
+    }
+
+    @Override
     public MapScaleBar getMapScaleBar() {
         return this.mapScaleBar;
+    }
+
+    @Override
+    public float getMapViewCenterX() {
+        return this.model.mapViewPosition.getMapViewCenterX();
+    }
+
+    @Override
+    public float getMapViewCenterY() {
+        return this.model.mapViewPosition.getMapViewCenterY();
     }
 
     @Override
@@ -282,37 +297,50 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
         return this.model;
     }
 
+    @Override
+    public float getOffsetX() {
+        return getWidth() * (getMapViewCenterX() - 0.5f);
+    }
+
+    @Override
+    public float getOffsetY() {
+        return getHeight() * (getMapViewCenterY() - 0.5f);
+    }
+
     public TouchGestureHandler getTouchGestureHandler() {
         return touchGestureHandler;
     }
 
     @Override
     public void onChange() {
-        // Request layout for child views (besides zoom controls)
-        int count = getChildCount();
-        for (int i = 0; i < count; i++) {
-            View child = getChildAt(i);
-            if (!child.equals(this.mapZoomControls)) {
-                layoutHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        requestLayout();
-                    }
-                });
-                break;
+        try {
+            // Request layout for child views (besides zoom controls)
+            int count = getChildCount();
+            for (int i = 0; i < count; i++) {
+                View child = getChildAt(i);
+                if (!child.equals(this.mapZoomControls)) {
+                    layoutHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            requestLayout();
+                        }
+                    });
+                    break;
+                }
             }
+        } catch (Exception ignored) {
         }
     }
 
     @Override
     protected void onDraw(Canvas androidCanvas) {
-        org.mapsforge.core.graphics.Canvas graphicContext = AndroidGraphicFactory.createGraphicContext(androidCanvas);
-        this.frameBuffer.draw(graphicContext);
+        org.mapsforge.core.graphics.Canvas canvas = AndroidGraphicFactory.createGraphicContext(androidCanvas);
+        this.frameBuffer.draw(canvas, getMapRotation());
         if (this.mapScaleBar != null) {
-            this.mapScaleBar.draw(graphicContext);
+            this.mapScaleBar.draw(canvas);
         }
-        this.fpsCounter.draw(graphicContext);
-        graphicContext.destroy();
+        this.fpsCounter.draw(canvas);
+        canvas.destroy();
     }
 
     @Override
@@ -354,56 +382,59 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
             this.mapZoomControls.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
         }
 
-        // Child views (besides zoom controls)
-        int count = getChildCount();
-        for (int i = 0; i < count; i++) {
-            View child = getChildAt(i);
-            if (child.equals(this.mapZoomControls)) {
-                continue;
-            }
-            if (child.getVisibility() != View.GONE && checkLayoutParams(child.getLayoutParams())) {
-                MapView.LayoutParams params = (MapView.LayoutParams) child.getLayoutParams();
-                int childWidth = child.getMeasuredWidth();
-                int childHeight = child.getMeasuredHeight();
-                Point point = mapViewProjection.toPixels(params.latLong);
-                if (point != null) {
-                    int childLeft = getPaddingLeft() + (int) Math.round(point.x);
-                    int childTop = getPaddingTop() + (int) Math.round(point.y);
-                    switch (params.alignment) {
-                        case TOP_LEFT:
-                            break;
-                        case TOP_CENTER:
-                            childLeft -= childWidth / 2;
-                            break;
-                        case TOP_RIGHT:
-                            childLeft -= childWidth;
-                            break;
-                        case CENTER_LEFT:
-                            childTop -= childHeight / 2;
-                            break;
-                        case CENTER:
-                            childLeft -= childWidth / 2;
-                            childTop -= childHeight / 2;
-                            break;
-                        case CENTER_RIGHT:
-                            childLeft -= childWidth;
-                            childTop -= childHeight / 2;
-                            break;
-                        case BOTTOM_LEFT:
-                            childTop -= childHeight;
-                            break;
-                        case BOTTOM_CENTER:
-                            childLeft -= childWidth / 2;
-                            childTop -= childHeight;
-                            break;
-                        case BOTTOM_RIGHT:
-                            childLeft -= childWidth;
-                            childTop -= childHeight;
-                            break;
+        try {
+            // Child views (besides zoom controls)
+            int count = getChildCount();
+            for (int i = 0; i < count; i++) {
+                View child = getChildAt(i);
+                if (child.equals(this.mapZoomControls)) {
+                    continue;
+                }
+                if (child.getVisibility() != View.GONE && checkLayoutParams(child.getLayoutParams())) {
+                    MapView.LayoutParams params = (MapView.LayoutParams) child.getLayoutParams();
+                    int childWidth = child.getMeasuredWidth();
+                    int childHeight = child.getMeasuredHeight();
+                    Point point = mapViewProjection.toPixels(params.latLong);
+                    if (point != null) {
+                        int childLeft = getPaddingLeft() + (int) Math.round(point.x);
+                        int childTop = getPaddingTop() + (int) Math.round(point.y);
+                        switch (params.alignment) {
+                            case TOP_LEFT:
+                                break;
+                            case TOP_CENTER:
+                                childLeft -= childWidth / 2;
+                                break;
+                            case TOP_RIGHT:
+                                childLeft -= childWidth;
+                                break;
+                            case CENTER_LEFT:
+                                childTop -= childHeight / 2;
+                                break;
+                            case CENTER:
+                                childLeft -= childWidth / 2;
+                                childTop -= childHeight / 2;
+                                break;
+                            case CENTER_RIGHT:
+                                childLeft -= childWidth;
+                                childTop -= childHeight / 2;
+                                break;
+                            case BOTTOM_LEFT:
+                                childTop -= childHeight;
+                                break;
+                            case BOTTOM_CENTER:
+                                childLeft -= childWidth / 2;
+                                childTop -= childHeight;
+                                break;
+                            case BOTTOM_RIGHT:
+                                childLeft -= childWidth;
+                                childTop -= childHeight;
+                                break;
+                        }
+                        child.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
                     }
-                    child.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
                 }
             }
+        } catch (Exception ignored) {
         }
     }
 
@@ -428,6 +459,11 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
     @Override
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         this.model.mapViewDimension.setDimension(new Dimension(width, height));
+
+        if (oldWidth != 0 && oldHeight != 0 && !Rotation.noRotation(getMapRotation())) {
+            rotate(new Rotation(getMapRotation().degrees, width * 0.5f, height * 0.5f));
+            layerManager.redrawLayers();
+        }
     }
 
     @Override
@@ -440,6 +476,8 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
         if (this.gestureDetectorExternal != null && this.gestureDetectorExternal.onTouchEvent(event)) {
             return true;
         }
+
+        this.touchGestureHandler.onTouchEvent(event);
 
         boolean retVal = this.scaleGestureDetector.onTouchEvent(event);
         if (!this.scaleGestureDetector.isInProgress()) {
@@ -479,6 +517,17 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
     }
 
     /**
+     * Rotates the view by degrees around pivot point.
+     *
+     * @param rotation the rotation definition.
+     */
+    @Override
+    public void rotate(Rotation rotation) {
+        this.getModel().mapViewPosition.setRotation(rotation);
+        //repaint();
+    }
+
+    /**
      * Sets the visibility of the zoom controls.
      *
      * @param showZoomControls true if the zoom controls should be visible, false otherwise.
@@ -502,6 +551,16 @@ public class MapView extends ViewGroup implements org.mapsforge.map.view.MapView
             this.mapScaleBar.destroy();
         }
         this.mapScaleBar = mapScaleBar;
+    }
+
+    @Override
+    public void setMapViewCenterX(float mapViewCenterX) {
+        this.model.mapViewPosition.setMapViewCenterX(mapViewCenterX);
+    }
+
+    @Override
+    public void setMapViewCenterY(float mapViewCenterY) {
+        this.model.mapViewPosition.setMapViewCenterY(mapViewCenterY);
     }
 
     @Override
