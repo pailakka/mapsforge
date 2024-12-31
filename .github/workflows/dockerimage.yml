@@ -3,18 +3,19 @@ name: Docker Image CI
 on: [push]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v1
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag teemupel/mapsforge:$(date +%s)
-    - name: Publish to Registry
-      uses: elgohr/Publish-Docker-Github-Action@master
-      with:
-        name: teemupel/mapsforge
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        -
+          name: Set up QEMU
+          uses: docker/setup-qemu-action@v3
+        -
+          name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v3
+        -
+          name: Build and push
+          uses: docker/build-push-action@v6
+          with:
+            push: true
+            context: .
+            tags: teemupel/mapsforge:latest
