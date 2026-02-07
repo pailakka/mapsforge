@@ -6,7 +6,7 @@
  * Copyright 2015-2017 devemux86
  * Copyright 2017 usrusr
  * Copyright 2018 Adrian Batzill
- * Copyright 2024 Sublimis
+ * Copyright 2024-2025 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -22,11 +22,10 @@
 package org.mapsforge.map.awt.graphics;
 
 import com.kitfox.svg.SVGCache;
-
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Color;
 import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.mapelements.PointTextContainer;
 import org.mapsforge.core.mapelements.SymbolContainer;
 import org.mapsforge.core.model.BoundingBox;
@@ -38,14 +37,13 @@ import java.awt.image.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class AwtGraphicFactory implements GraphicFactory {
     public static final GraphicFactory INSTANCE = new AwtGraphicFactory();
     public static final java.awt.Color TRANSPARENT = new java.awt.Color(0, 0, 0, 0);
 
-    protected ColorModel monoColorModel = null;
-    protected final AtomicInteger hillshadingColor = new AtomicInteger(Integer.MAX_VALUE);
+    protected final Object monoColorModelSync = new Object();
+    protected volatile MonoColorModel monoColorModel = null;
 
     private AwtGraphicFactory() {
     }
@@ -104,10 +102,7 @@ public class AwtGraphicFactory implements GraphicFactory {
 
     @Override
     public Bitmap createBitmap(int width, int height, boolean isTransparent) {
-        if (isTransparent) {
-            throw new UnsupportedOperationException("No transparencies in AWT implementation");
-        }
-        return new AwtBitmap(width, height);
+        return new AwtBitmap(width, height, isTransparent);
     }
 
     /**
@@ -142,9 +137,13 @@ public class AwtGraphicFactory implements GraphicFactory {
 
     @Override
     public AwtHillshadingBitmap createMonoBitmap(int width, int height, byte[] buffer, int padding, BoundingBox area, int color) {
-        if (color != hillshadingColor.getAndSet(color) || monoColorModel == null) {
-            synchronized (this.hillshadingColor) {
-                if (color != hillshadingColor.getAndSet(color) || monoColorModel == null) {
+        MonoColorModel myMonoColorModel = this.monoColorModel;
+
+        if (myMonoColorModel == null || color != myMonoColorModel.color) {
+            synchronized (this.monoColorModelSync) {
+                myMonoColorModel = this.monoColorModel;
+
+                if (myMonoColorModel == null || color != myMonoColorModel.color) {
                     final java.awt.Color awtColor = new java.awt.Color(color, true);
 
                     final int alpha = awtColor.getAlpha();
@@ -164,15 +163,15 @@ public class AwtGraphicFactory implements GraphicFactory {
                         alphas[i] = (byte) (i * alpha / 255);
                     }
 
-                    monoColorModel = new IndexColorModel(8, 256, reds, greens, blues, alphas);
+                    this.monoColorModel = myMonoColorModel = new MonoColorModel(new IndexColorModel(8, 256, reds, greens, blues, alphas), color);
                 }
             }
         }
 
         DataBuffer dataBuffer = new DataBufferByte(buffer, buffer.length);
-        SampleModel singleByteSampleModel = monoColorModel.createCompatibleSampleModel(width + 2 * padding, height + 2 * padding);
+        SampleModel singleByteSampleModel = myMonoColorModel.model.createCompatibleSampleModel(width + 2 * padding, height + 2 * padding);
         WritableRaster writableRaster = Raster.createWritableRaster(singleByteSampleModel, dataBuffer, null);
-        BufferedImage bufferedImage = new BufferedImage(monoColorModel, writableRaster, false, null);
+        BufferedImage bufferedImage = new BufferedImage(myMonoColorModel.model, writableRaster, false, null);
 
         return new AwtHillshadingBitmap(bufferedImage, padding, area);
     }
@@ -226,4 +225,13 @@ public class AwtGraphicFactory implements GraphicFactory {
         return new AwtSvgBitmap(inputStream, hash, scaleFactor, width, height, percent);
     }
 
+    protected static class MonoColorModel {
+        final ColorModel model;
+        final int color;
+
+        protected MonoColorModel(ColorModel model, int color) {
+            this.model = model;
+            this.color = color;
+        }
+    }
 }

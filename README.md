@@ -5,13 +5,15 @@
 
 <img src="docs/logo/Mapsforge.svg" style="bottom:0;" width="200" align="right">
 
+Vector map library and writer - running on Android and Desktop.
+
 See the **[integration guide](docs/Integration.md)** and [changelog](docs/Changelog.md). And read through [how to contribute](docs/CONTRIBUTING.md) guidelines.
 
-If you have any questions or problems, don't hesitate to ask the [Discussions](https://github.com/mapsforge/mapsforge/discussions) for help.
+If you have any questions or problems, don't hesitate to ask the [forum](https://github.com/mapsforge/mapsforge/discussions) for help.
 
 - Mapsforge project uses a [compact file format](docs/Specification-Binary-Map-File.md) for fast ad-hoc rendering of OpenStreetMap data.
 - We provide tools to [compile your own maps](docs/Getting-Started-Map-Writer.md) with detailed [instructions](docs/MapCreation.md) and also [precompiled maps](https://download.mapsforge.org/).
-- It provides [simple boilerplate code](mapsforge-samples-android/src/main/java/org/mapsforge/samples/android/GettingStarted.java) to build applications for Android that display OpenStreetMap based maps with rotation and hillshading.
+- It provides [simple boilerplate code](mapsforge-samples-android) to build applications for Android that display OpenStreetMap based maps with rotation and hillshading.
 - It provides a library to build standalone applications in Java ([instructions](docs/Desktop.md)).
 - Mapsforge maps can be flexibly styled with XML style files ([render themes](docs/Rendertheme.md)).
 - Mapsforge library supports offline high resolution [hill shading](https://github.com/mapsforge/mapsforge/blob/master/mapsforge-samples-android/src/main/java/org/mapsforge/samples/android/HillshadingMapViewer.java).
@@ -35,8 +37,9 @@ In other words, you are allowed to include Mapsforge library in your Android app
 
 | Android       |
 | ------------- |
-|<img src="docs/images/android.png" width="1000">|
+|![Mapsforge](https://github.com/user-attachments/assets/41d66231-ce00-4647-856e-86092dd60d12)|
+|![Mapsforge2](https://github.com/user-attachments/assets/2898c12a-d051-412a-acd2-e1c4a847cd57)|
 
 | Desktop       |
 | ------------- |
-|![Desktop](docs/images/desktop.png)|
+|![2024-12-18-adaptive10](https://github.com/user-attachments/assets/f2fcb16a-e12d-4290-bdd4-ac901ea8a794)|

@@ -1,6 +1,6 @@
 /*
  * Copyright 2024 devemux86
- * Copyright 2024 Sublimis
+ * Copyright 2024-2025 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -17,9 +17,9 @@ package org.mapsforge.core.util;
 
 public final class Constants {
 
-    public static final int HILLSHADING_COLOR_DEFAULT = 0xff000000;
-    public static final int HILLSHADING_MAGNITUDE_DEFAULT = 128;
-
+    /**
+     * Maximum amount of memory that the Java virtual machine will attempt to use, in megabytes.
+     */
     public static final long MAX_MEMORY_MB = Runtime.getRuntime().maxMemory() / 1000 / 1000;
 
     private Constants() {

@@ -88,7 +88,9 @@
     <string name="dialog_theme_title">Select a theme</string>
 
     <string name="theme_motorider">Motorider</string>
-    <string name="theme_motorider_dark">Motorider Dark</string>
+    <string name="theme_biker">Biker</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_indigo">Indigo</string>
     <string name="theme_default">Default</string>
     <string name="theme_osmarender">Osmarender</string>
     <string name="theme_external">External theme (Android 5)</string>
@@ -101,4 +103,7 @@
     <string name="startup_message_twomaps">To run this sample activity, you need also a map with filename second.map installed on storage.</string>
     <string name="startup_message_poi">To run this sample activity, you need any poi with filename berlin.poi installed on storage.\n\nadb push file.poi /Android/media/org.mapsforge.samples.android/berlin.poi</string>
 
+    <string name="warning">Warning</string>
+    <string name="startup_message_mbtiles">To run this sample activity, you need an MBTiles database installed on storage.</string>
+    <string name="exit">Exit</string>
 </resources>

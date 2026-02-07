@@ -28,7 +28,6 @@ import org.mapsforge.core.util.LatLongUtils;
 import org.mapsforge.core.util.Parameters;
 import org.mapsforge.map.awt.graphics.AwtGraphicFactory;
 import org.mapsforge.map.awt.util.AwtUtil;
-import org.mapsforge.map.awt.util.JavaPreferences;
 import org.mapsforge.map.awt.view.MapView;
 import org.mapsforge.map.datastore.MapDataStore;
 import org.mapsforge.map.datastore.MultiMapDataStore;
@@ -47,37 +46,45 @@ import org.mapsforge.map.layer.labels.LabelLayer;
 import org.mapsforge.map.layer.renderer.TileRendererLayer;
 import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.model.Model;
-import org.mapsforge.map.model.common.PreferencesFacade;
 import org.mapsforge.map.reader.MapFile;
+import org.mapsforge.map.rendertheme.ExternalRenderTheme;
 import org.mapsforge.map.rendertheme.internal.MapsforgeThemes;
 
 import javax.swing.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import java.io.FileNotFoundException;
+import java.util.*;
 import java.util.prefs.Preferences;
 
 public final class Samples {
     private static final GraphicFactory GRAPHIC_FACTORY = AwtGraphicFactory.INSTANCE;
     private static final boolean SHOW_DEBUG_LAYERS = false;
     private static final boolean SHOW_RASTER_MAP = false;
+    private static final boolean EXTERNAL_HILLSHADING = false;
 
     private static final String MESSAGE = "Are you sure you want to exit the application?";
     private static final String TITLE = "Confirm close";
+
+    private static final String LATITUDE = "latitude";
+    private static final String LONGITUDE = "longitude";
+    private static final String ZOOM_LEVEL = "zoomLevel";
 
     /**
      * Starts the {@code Samples}.
      *
      * @param args command line args: expects the map files as multiple parameters
-     *             with possible SRTM hgt folder as 1st argument.
+     *             with possible theme file as 1st argument
+     *             and possible SRTM hgt folder as 2nd argument.
      */
     public static void main(String[] args) {
         // Square frame buffer
         Parameters.SQUARE_FRAME_BUFFER = false;
+
+        final File themeFile = getThemeFile(args);
+        if (themeFile != null)
+            args = Arrays.copyOfRange(args, 1, args.length);
 
         final HillsRenderConfig hillsConfig;
         File demFolder = getDemFolder(args);
@@ -96,6 +103,7 @@ public final class Samples {
             // You can override theme values
             // hillsConfig.setMagnitudeScaleFactor(1);
             // hillsConfig.setColor(0xff000000);
+            hillsConfig.setExternal(EXTERNAL_HILLSHADING);
 
             hillsConfig.indexOnThread();
             args = Arrays.copyOfRange(args, 1, args.length);
@@ -106,7 +114,7 @@ public final class Samples {
         final List<File> mapFiles = SHOW_RASTER_MAP ? null : getMapFiles(args);
         final MapView mapView = createMapView();
 
-        final PreferencesFacade preferencesFacade = new JavaPreferences(Preferences.userNodeForPackage(Samples.class));
+        final JavaPreferences preferences = new JavaPreferences(Preferences.userNodeForPackage(Samples.class));
 
         final JFrame frame = new JFrame();
         frame.setTitle("Mapsforge Samples");
@@ -120,7 +128,10 @@ public final class Samples {
             public void windowClosing(WindowEvent e) {
                 int result = JOptionPane.showConfirmDialog(frame, MESSAGE, TITLE, JOptionPane.YES_NO_OPTION);
                 if (result == JOptionPane.YES_OPTION) {
-                    mapView.getModel().save(preferencesFacade);
+                    final MapViewPosition mapViewPosition = mapView.getModel().mapViewPosition;
+                    preferences.putDouble(LATITUDE, mapViewPosition.getCenter().latitude);
+                    preferences.putDouble(LONGITUDE, mapViewPosition.getCenter().longitude);
+                    preferences.putByte(ZOOM_LEVEL, mapViewPosition.getZoomLevel());
                     mapView.destroyAll();
                     AwtGraphicFactory.clearResourceMemoryCache();
                     frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -129,19 +140,22 @@ public final class Samples {
 
             @Override
             public void windowOpened(WindowEvent e) {
-                final BoundingBox boundingBox = addLayers(mapView, mapFiles, hillsConfig);
+                final BoundingBox boundingBox = addLayers(mapView, mapFiles, hillsConfig, themeFile);
                 final Model model = mapView.getModel();
-                model.init(preferencesFacade);
+                double latitude = preferences.getDouble(LATITUDE, 0);
+                double longitude = preferences.getDouble(LONGITUDE, 0);
+                byte zoomLevel = preferences.getByte(ZOOM_LEVEL, (byte) 0);
+                mapView.getModel().mapViewPosition.setMapPosition(new MapPosition(new LatLong(latitude, longitude), zoomLevel));
                 if (model.mapViewPosition.getZoomLevel() == 0 || !boundingBox.contains(model.mapViewPosition.getCenter())) {
-                    byte zoomLevel = LatLongUtils.zoomForBounds(model.mapViewDimension.getDimension(), boundingBox, model.displayModel.getTileSize());
-                    model.mapViewPosition.setMapPosition(new MapPosition(boundingBox.getCenterPoint(), zoomLevel));
+                    byte zoomForBounds = LatLongUtils.zoomForBounds(model.mapViewDimension.getDimension(), boundingBox, model.displayModel.getTileSize());
+                    model.mapViewPosition.setMapPosition(new MapPosition(boundingBox.getCenterPoint(), zoomForBounds));
                 }
             }
         });
         frame.setVisible(true);
     }
 
-    private static BoundingBox addLayers(MapView mapView, List<File> mapFiles, HillsRenderConfig hillsRenderConfig) {
+    private static BoundingBox addLayers(MapView mapView, List<File> mapFiles, HillsRenderConfig hillsRenderConfig, File themeFile) {
         Layers layers = mapView.getLayerManager().getLayers();
 
         int tileSize = SHOW_RASTER_MAP ? 256 : 512;
@@ -168,7 +182,7 @@ public final class Samples {
         } else {
             // Vector
             mapView.getModel().displayModel.setFixedTileSize(tileSize);
-            final MultiMapDataStore multiMapDataStore = new MultiMapDataStore(MultiMapDataStore.DataPolicy.RETURN_ALL);
+            final MultiMapDataStore multiMapDataStore = new MultiMapDataStore(MultiMapDataStore.DataPolicy.DEDUPLICATE);
             for (File file : mapFiles) {
                 final MapFile mapFileDataStore = new MapFile(file);
 
@@ -177,8 +191,20 @@ public final class Samples {
                 }
                 multiMapDataStore.addMapDataStore(mapFileDataStore, false, false);
             }
-            TileRendererLayer tileRendererLayer = createTileRendererLayer(tileCache, multiMapDataStore, mapView.getModel().mapViewPosition, hillsRenderConfig);
+            TileRendererLayer tileRendererLayer = createTileRendererLayer(tileCache, multiMapDataStore, mapView.getModel().mapViewPosition, EXTERNAL_HILLSHADING ? null : hillsRenderConfig, themeFile);
             layers.add(tileRendererLayer);
+            if (EXTERNAL_HILLSHADING) {
+                TileCache hillshadingCache = AwtUtil.createTileCache(
+                        tileSize,
+                        mapView.getModel().frameBufferModel.getOverdrawFactor(),
+                        1024,
+                        new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString()));
+                TileRendererLayer hillshadingLayer = new TileRendererLayer(hillshadingCache, multiMapDataStore,
+                        mapView.getModel().mapViewPosition, true, false, false,
+                        GRAPHIC_FACTORY, hillsRenderConfig);
+                hillshadingLayer.setXmlRenderTheme(MapsforgeThemes.HILLSHADING);
+                layers.add(hillshadingLayer);
+            }
             LabelLayer labelLayer = new LabelLayer(AwtGraphicFactory.INSTANCE, tileRendererLayer.getLabelStore());
             mapView.getLayerManager().getLayers().add(labelLayer);
             boundingBox = multiMapDataStore.boundingBox();
@@ -214,7 +240,7 @@ public final class Samples {
         };
     }
 
-    private static TileRendererLayer createTileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, final MapViewPosition mapViewPosition, HillsRenderConfig hillsRenderConfig) {
+    private static TileRendererLayer createTileRendererLayer(TileCache tileCache, MapDataStore mapDataStore, final MapViewPosition mapViewPosition, HillsRenderConfig hillsRenderConfig, File themeFile) {
         TileRendererLayer tileRendererLayer = new TileRendererLayer(tileCache, mapDataStore, mapViewPosition, false, false, true, GRAPHIC_FACTORY, hillsRenderConfig) {
             @Override
             public boolean onTap(LatLong tapLatLong, Point layerXY, Point tapXY) {
@@ -223,7 +249,11 @@ public final class Samples {
                 return true;
             }
         };
-        tileRendererLayer.setXmlRenderTheme(MapsforgeThemes.MOTORIDER);
+        try {
+            tileRendererLayer.setXmlRenderTheme(themeFile != null ? new ExternalRenderTheme(themeFile.getAbsolutePath()) : MapsforgeThemes.MOTORIDER);
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
         return tileRendererLayer;
     }
 
@@ -261,6 +291,22 @@ public final class Samples {
                 result.add(mapFile);
         }
         return result;
+    }
+
+    private static File getThemeFile(String[] args) {
+        if (args.length == 0) {
+            if (SHOW_RASTER_MAP) {
+                return null;
+            } else {
+                throw new IllegalArgumentException("missing argument: <mapFile>");
+            }
+        }
+
+        File themeFile = new File(args[0]);
+        if (themeFile.exists() && themeFile.isFile() && themeFile.canRead() && themeFile.getName().toLowerCase(Locale.ROOT).endsWith(".xml")) {
+            return themeFile;
+        }
+        return null;
     }
 
     /**

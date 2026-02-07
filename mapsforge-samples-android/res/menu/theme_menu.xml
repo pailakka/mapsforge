@@ -9,8 +9,14 @@
             android:checked="true"
             android:title="@string/theme_motorider" />
         <item
-            android:id="@+id/theme_motorider_dark"
-            android:title="@string/theme_motorider_dark" />
+            android:id="@+id/theme_biker"
+            android:title="@string/theme_biker" />
+        <item
+            android:id="@+id/theme_dark"
+            android:title="@string/theme_dark" />
+        <item
+            android:id="@+id/theme_indigo"
+            android:title="@string/theme_indigo" />
         <item
             android:id="@+id/theme_default"
             android:title="@string/theme_default" />

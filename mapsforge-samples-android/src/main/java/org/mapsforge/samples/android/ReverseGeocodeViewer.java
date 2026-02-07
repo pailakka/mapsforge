@@ -69,13 +69,13 @@ public class ReverseGeocodeViewer extends DefaultTheme {
         int tileYMax = MercatorProjection.pixelYToTileY(pixelY + touchRadius, this.mapView.getModel().mapViewPosition.getZoomLevel(), this.mapView.getModel().displayModel.getTileSize());
         Tile upperLeft = new Tile(tileXMin, tileYMin, this.mapView.getModel().mapViewPosition.getZoomLevel(), this.mapView.getModel().displayModel.getTileSize());
         Tile lowerRight = new Tile(tileXMax, tileYMax, this.mapView.getModel().mapViewPosition.getZoomLevel(), this.mapView.getModel().displayModel.getTileSize());
-        MapReadResult mapReadResult = getMapFile().readLabels(upperLeft, lowerRight);
+        MapReadResult mapReadResult = getMapFile().readNamedItems(upperLeft, lowerRight);
 
         StringBuilder sb = new StringBuilder();
 
         // Filter POI
         sb.append("*** POI ***");
-        for (PointOfInterest pointOfInterest : mapReadResult.pointOfInterests) {
+        for (PointOfInterest pointOfInterest : mapReadResult.pois) {
             Point layerXY = this.mapView.getMapViewProjection().toPixels(pointOfInterest.position);
             if (!Rotation.noRotation(this.mapView.getMapRotation()) && layerXY != null) {
                 layerXY = this.mapView.getMapRotation().rotate(layerXY, true);

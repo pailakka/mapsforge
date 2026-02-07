@@ -1,5 +1,5 @@
 /*
- * Copyright 2010, 2011, 2012, 2013 mapsforge.org
+ * Copyright 2025 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -12,10 +12,20 @@
  * You should have received a copy of the GNU Lesser General Public License along with
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package org.mapsforge.map.model.common;
+package org.mapsforge.map.android.util;
 
-public interface Persistable {
-    void init(PreferencesFacade preferencesFacade);
+import android.os.Build;
 
-    void save(PreferencesFacade preferencesFacade);
+public final class AndroidParameters {
+
+    /**
+     * To prevent {@code libhwui.so} "null pointer dereference" SIGSEGV crashes on some Androids.
+     * The only drawback seems to be that line joins of a few paths may not be rounded.
+     * Defaults to {@code true} for Android API levels 32 and below.
+     */
+    public static boolean ANDROID_LIBHWUI_FIX = Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2;
+
+    private AndroidParameters() {
+        throw new IllegalStateException();
+    }
 }

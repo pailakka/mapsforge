@@ -2,25 +2,86 @@
 
 ## Next version
 
+- POI writer: way-filtering off by default [#1773](https://github.com/mapsforge/mapsforge/pull/1773)
+- Map theme improvements
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.28.0)
+
+## Version 0.27.0 (2026-01-12)
+
+- Negative rule improvement [#1755](https://github.com/mapsforge/mapsforge/pull/1755)
+- `ThemeCallback.getColor` method [#1737](https://github.com/mapsforge/mapsforge/pull/1737)
+- Map writer performance improvement [#1741](https://github.com/mapsforge/mapsforge/pull/1741)
+- Map theme improvements
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.27.0)
+
+## Version 0.26.1 (2025-09-15)
+
+- Render themes: restore `display="always"` [#1736](https://github.com/mapsforge/mapsforge/pull/1736)
+  - Add `display="order"`
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.26.1)
+
+## Version 0.26.0 (2025-09-14)
+
+- MBTiles raster tile source (Android) [#1687](https://github.com/mapsforge/mapsforge/pull/1687)
+- `ThemeCallback.getText` method [#1700](https://github.com/mapsforge/mapsforge/pull/1700)
+- Dark and Indigo map themes [#1704](https://github.com/mapsforge/mapsforge/issues/1704)
+- Motorider map theme improvements [#1483](https://github.com/mapsforge/mapsforge/issues/1483)
+- Biker map theme improvements [#1674](https://github.com/mapsforge/mapsforge/issues/1674)
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.26.0)
+
+## Version 0.25.0 (2025-04-04)
+
+- Hillshading tile layer [#1672](https://github.com/mapsforge/mapsforge/pull/1672)
+- POI: Arabic normalization [#1680](https://github.com/mapsforge/mapsforge/pull/1680)
+- Motorider map theme improvements [#1483](https://github.com/mapsforge/mapsforge/issues/1483)
+- Biker map theme [#1674](https://github.com/mapsforge/mapsforge/issues/1674)
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.25.0)
+
+## Version 0.24.1 (2025-03-07)
+ 
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.24.1)
+
+## Version 0.24.0 (2025-03-03)
+
+- Multi-map deduplicate optimization [#1635](https://github.com/mapsforge/mapsforge/pull/1635)
+- Label direct rendering `CachedMapDataStoreLabelStore` [#1646](https://github.com/mapsforge/mapsforge/pull/1646)
+- Color filter theme resources `ThemeCallback.getBitmap` [#1622](https://github.com/mapsforge/mapsforge/pull/1622)
+- Android 32-bit color option [#1656](https://github.com/mapsforge/mapsforge/pull/1656)
+  - `Parameters.ANDROID_32BIT_COLOR`
+- Motorider map theme improvements [#1483](https://github.com/mapsforge/mapsforge/issues/1483)
+- Rename `MapDataStore.readLabels` to `readNamedItems` [#1640](https://github.com/mapsforge/mapsforge/pull/1640)
+  - Rename `MapFile.Selector.LABELS` to `NAMED`
+- Minor improvements and bug fixes
+- [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.24.0)
+
+## Version 0.23.0 (2025-01-06)
+
 - Map rotation: marker billboard option [#1563](https://github.com/mapsforge/mapsforge/pull/1563)
 - Map label / symbol improvements [#1579](https://github.com/mapsforge/mapsforge/pull/1579) [#1586](https://github.com/mapsforge/mapsforge/pull/1586) [#1588](https://github.com/mapsforge/mapsforge/pull/1588)
 - Adaptive hillshading and improvements
   - [#1561](https://github.com/mapsforge/mapsforge/pull/1561) [#1592](https://github.com/mapsforge/mapsforge/pull/1592) [#1597](https://github.com/mapsforge/mapsforge/pull/1597) [#1605](https://github.com/mapsforge/mapsforge/pull/1605)
 - Map rendering performance improvements [#1599](https://github.com/mapsforge/mapsforge/pull/1599)
-- Multi-map improvements [#1582](https://github.com/mapsforge/mapsforge/pull/1582)
-  - `MapDataStore.setPriority`
+- Multi-map `MapDataStore.setPriority` [#1582](https://github.com/mapsforge/mapsforge/pull/1582)
 - Group of layers with z-order `ZOrderGroupLayer` [#1603](https://github.com/mapsforge/mapsforge/pull/1603)
 - Motorider map theme improvements [#1483](https://github.com/mapsforge/mapsforge/issues/1483)
 - Remove `IMapViewPosition`, use `MapViewPosition` [#1591](https://github.com/mapsforge/mapsforge/pull/1591)
 - Remove `Filter`, use `ThemeCallback` [#1573](https://github.com/mapsforge/mapsforge/pull/1573)
+- Move `MapViewerTemplate` in samples [#1616](https://github.com/mapsforge/mapsforge/pull/1616)
+- Move preferences in samples [#1617](https://github.com/mapsforge/mapsforge/pull/1617)
 - Minor improvements and bug fixes
 - [Solved issues](https://github.com/mapsforge/mapsforge/issues?q=is%3Aclosed+milestone%3A0.23.0)
 
 ## Version 0.22.0 (2024-10-10)
 
-- Map rotation [#7](https://github.com/mapsforge/mapsforge/issues/7)
+- Map rotation [#1491](https://github.com/mapsforge/mapsforge/pull/1491) [#1493](https://github.com/mapsforge/mapsforge/pull/1493)
 - Rotation gesture [#1495](https://github.com/mapsforge/mapsforge/issues/1495)
-- Fractional zoom [#75](https://github.com/mapsforge/mapsforge/issues/75)
+- Fractional zoom [#1492](https://github.com/mapsforge/mapsforge/pull/1492)
   - `Parameters.FRACTIONAL_ZOOM`
 - Pre-cache map tiles (+-zoom, margin) [#1507](https://github.com/mapsforge/mapsforge/issues/1507)
 - Hillshading new algorithms and improvements
@@ -67,7 +128,7 @@
 
 ## Version 0.18.0 (2022-06-18)
 
-- Multiple maps: optimize deduplicate [#1288](https://github.com/mapsforge/mapsforge/pull/1288)
+- Multi-map deduplicate optimization [#1288](https://github.com/mapsforge/mapsforge/pull/1288)
 - Validate coordinates option [#1294](https://github.com/mapsforge/mapsforge/pull/1294)
   - `Parameters.VALIDATE_COORDINATES`
 - Minor improvements and bug fixes
