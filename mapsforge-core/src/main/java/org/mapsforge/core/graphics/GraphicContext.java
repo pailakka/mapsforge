@@ -6,6 +6,7 @@
  * Copyright 2019 cpt1gl0
  * Copyright 2019 Adrian Batzill
  * Copyright 2019 mg4gh
+ * Copyright 2025 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -20,6 +21,7 @@
  */
 package org.mapsforge.core.graphics;
 
+import org.mapsforge.core.model.Point;
 import org.mapsforge.core.model.Rectangle;
 
 public interface GraphicContext {
@@ -43,6 +45,8 @@ public interface GraphicContext {
 
     void drawPath(Path path, Paint paint);
 
+    void drawLines(Point[][] coordinates, float dy, Paint paint);
+
     void drawPathText(String text, Path path, Paint paint);
 
     void drawText(String text, int x, int y, Paint paint);
@@ -65,7 +69,7 @@ public interface GraphicContext {
 
     void setClip(int left, int top, int width, int height, boolean intersect);
 
-    void setClipDifference(int left, int top, int width, int height);
+    void setClipDifference(float left, float top, float width, float height);
 
     void setFilterBitmap(boolean filter);
 
@@ -73,6 +77,8 @@ public interface GraphicContext {
      * Shade whole map tile when tileRect is null (and bitmap, shadeRect are null).
      * Shade tileRect neutral if bitmap is null (and shadeRect).
      * Shade tileRect with bitmap otherwise.
+     *
+     * @param external For external use, like producing transparent bitmap tiles.
      */
-    void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude, int color);
+    void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude, int color, boolean external);
 }

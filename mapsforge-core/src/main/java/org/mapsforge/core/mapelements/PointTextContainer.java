@@ -1,7 +1,7 @@
 /*
  * Copyright 2010, 2011, 2012, 2013 mapsforge.org
  * Copyright 2014 Ludwig M Brinckmann
- * Copyright 2024 Sublimis
+ * Copyright 2024-2025 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -62,8 +62,13 @@ public abstract class PointTextContainer extends MapElementContainer {
 
     @Override
     public boolean clashesWith(MapElementContainer other, Rotation rotation) {
-        // If exactly one of the elements is always drawn, the elements do not clash, otherwise do more checks
-        if (Display.ALWAYS == this.display ^ Display.ALWAYS == other.display) {
+        // If any element is always drawn, the elements do not clash, otherwise do more checks
+        if (Display.ALWAYS == this.display || Display.ALWAYS == other.display) {
+            return false;
+        }
+
+        // If exactly one of the elements is order drawn, the elements do not clash, otherwise do more checks
+        if (Display.ORDER == this.display ^ Display.ORDER == other.display) {
             return false;
         }
 

@@ -358,6 +358,12 @@
         <osm-tag key="route" value="ferry" zoom-appear="11"/>
     </ways>
 
+    <!-- POWER-LINES -->
+    <ways>
+        <osm-tag key="power" value="line" zoom-appear="13"/>
+        <osm-tag key="power" value="minor_line" zoom-appear="14"/>
+    </ways>
+
     <!-- BUILDINGS -->
     <ways>
         <osm-tag key="building" label-position="true" value="apartment" zoom-appear="15"/>
@@ -640,6 +646,8 @@
         <osm-tag equivalent-values="1,true" key="oneway" renderable="false" value="yes"/>
         <osm-tag key="oneway" renderable="false" value="-1"/>
         <osm-tag equivalent-values="0,false" key="oneway" renderable="false" value="no"/>
+
+        <osm-tag key="toll" value="tl_yes" equivalent-values="true,yes" renderable="false"/>
 
         <osm-tag key="piste:difficulty" renderable="false" value="novice"/>
         <osm-tag key="piste:difficulty" renderable="false" value="easy"/>

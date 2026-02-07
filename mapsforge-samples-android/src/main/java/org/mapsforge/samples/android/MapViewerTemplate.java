@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Lesser General Public License along with
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package org.mapsforge.map.android.util;
+package org.mapsforge.samples.android;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -27,7 +27,6 @@ import org.mapsforge.map.datastore.MapDataStore;
 import org.mapsforge.map.layer.cache.TileCache;
 import org.mapsforge.map.layer.hills.HillsRenderConfig;
 import org.mapsforge.map.model.MapViewPosition;
-import org.mapsforge.map.model.common.PreferencesFacade;
 import org.mapsforge.map.reader.MapFile;
 import org.mapsforge.map.rendertheme.XmlRenderTheme;
 import org.mapsforge.map.rendertheme.XmlRenderThemeStyleMenu;
@@ -42,10 +41,14 @@ import java.util.List;
  */
 public abstract class MapViewerTemplate extends Activity {
 
+    protected static final String LATITUDE = "latitude";
+    protected static final String LONGITUDE = "longitude";
+    protected static final String ZOOM_LEVEL = "zoomLevel";
+
     protected MapView mapView;
-    protected PreferencesFacade preferencesFacade;
+    protected AndroidPreferences preferences;
     protected XmlRenderThemeStyleMenu renderThemeStyleMenu;
-    protected List<TileCache> tileCaches = new ArrayList<TileCache>();
+    protected List<TileCache> tileCaches = new ArrayList<>();
 
     /*
      * Abstract methods that must be implemented.
@@ -130,7 +133,10 @@ public abstract class MapViewerTemplate extends Activity {
      */
     protected void createMapViews() {
         mapView = getMapView();
-        mapView.getModel().init(this.preferencesFacade);
+        double latitude = this.preferences.getDouble(LATITUDE, 0);
+        double longitude = this.preferences.getDouble(LONGITUDE, 0);
+        byte zoomLevel = this.preferences.getByte(ZOOM_LEVEL, (byte) 0);
+        mapView.getModel().mapViewPosition.setMapPosition(new MapPosition(new LatLong(latitude, longitude), zoomLevel));
         mapView.getMapScaleBar().setVisible(true);
         mapView.setBuiltInZoomControls(hasZoomControls());
         mapView.getMapZoomControls().setAutoHide(isZoomControlsAutoHide());
@@ -143,7 +149,7 @@ public abstract class MapViewerTemplate extends Activity {
      * activity restarts.
      */
     protected void createSharedPreferences() {
-        this.preferencesFacade = new AndroidPreferences(this.getSharedPreferences(getPersistableId(), MODE_PRIVATE));
+        this.preferences = new AndroidPreferences(this.getSharedPreferences(getPersistableId(), MODE_PRIVATE));
     }
 
     /**
@@ -183,8 +189,6 @@ public abstract class MapViewerTemplate extends Activity {
     /**
      * Provides the directory of the map file, by default the Android external storage
      * directory: /Android/media/org.mapsforge.samples.android/
-     *
-     * @return
      */
     protected File getMapFileDirectory() {
         return getExternalMediaDirs()[0];
@@ -267,8 +271,6 @@ public abstract class MapViewerTemplate extends Activity {
 
     /**
      * Android Activity life cycle method.
-     *
-     * @param savedInstanceState
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -285,8 +287,11 @@ public abstract class MapViewerTemplate extends Activity {
      */
     @Override
     protected void onPause() {
-        mapView.getModel().save(this.preferencesFacade);
-        this.preferencesFacade.save();
+        final MapViewPosition mapViewPosition = this.mapView.getModel().mapViewPosition;
+        this.preferences.putDouble(LATITUDE, mapViewPosition.getCenter().latitude);
+        this.preferences.putDouble(LONGITUDE, mapViewPosition.getCenter().longitude);
+        this.preferences.putByte(ZOOM_LEVEL, mapViewPosition.getZoomLevel());
+        this.preferences.save();
         super.onPause();
     }
 
@@ -331,7 +336,7 @@ public abstract class MapViewerTemplate extends Activity {
      */
     protected MapView getMapView() {
         setContentView(getLayoutId());
-        return (MapView) findViewById(getMapViewId());
+        return findViewById(getMapViewId());
     }
 
     /**

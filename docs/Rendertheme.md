@@ -41,9 +41,9 @@ A rule element has several attributes to specify which map elements the rule mat
 |-------------|----------------|---------------|------------|
 |e|<ul><li>node</li><li>way</li><li>any</li></ul>|Defines which map element type will be matched.|yes|
 |k|[string](http://www.w3.org/TR/xmlschema-2/#string)|The key of the tile source tag. <ul><li>A vertical bar "`\|`" can be used to specify multiple keys.</li><li>An asterisk "`*`" serves as wildcard character.</li>|yes|
-|v|[string](http://www.w3.org/TR/xmlschema-2/#string)|The value of the tile source tag. <ul><li>A vertical bar "`\|`" can be used to specify multiple values.</li><li>An asterisk "`*`" serves as wildcard character.</li><li>A minus sign "`-`" excludes the other values after "`\|`". It never works alone.</li><li>A tilde "`~`" matches if the map element does not have a tag with the specified key.</li>|yes|
+|v|[string](http://www.w3.org/TR/xmlschema-2/#string)|The value of the tile source tag. <ul><li>A vertical bar "`\|`" can be used to specify multiple values.</li><li>An asterisk "`*`" serves as wildcard character.</li><li>A minus sign "`-`" matches when either key is not present or excludes the other values after "`\|`". It never works alone.</li><li>A tilde "`~`" matches when either key is not present or matches if the map element does not have a tag with the specified key.</li>|yes|
 |closed|<ul><li>yes</li><li>no</li><li>any</li></ul>|Defines which ways will be matched. A way is considered as closed if its first node and its last node are equal.|no (default is *any*)|
-|zoom-min|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The minimum zoom level on which the rule will be matched.|no (default is 0)|
+|zoom-min|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The minimum zoom level on which the rule will be matched. It cannot be larger than `zoom-appear` in [tag-mapping](https://github.com/mapsforge/mapsforge/blob/master/mapsforge-map-writer/src/main/config/tag-mapping.xml).|no (default is 0)|
 |zoom-max|[unsignedByte](http://www.w3.org/TR/xmlschema-2/#unsignedByte)|The maximum zoom level on which the rule will be matched.|no (default is 127)|
 
 Rules can be nested to any level of depth. This can be used to define rendering instructions which depend on multiple rules. It may also be used to structure complex declarations and to avoid redundancy:
@@ -273,10 +273,11 @@ Labels and icons are now drawn in order of priority, higher priorities first. Th
 ```
 
 ## Display
-The display directive has been added whereever priorities can be used. The following values can be used:
- - always: an element will always be displayed regardless of space. 
- - ifspace: an element will only be displayed if the layout algorithm determines there is space and no higher priority element will take it. 
- - never: an element is not displayed. This is useful to blank out elements.
+The display directive has been added wherever priorities can be used. The following values can be used:
+- ifspace: An element is displayed if there is space for it and no higher priority element will take it. This is the default.
+- order: An element will always be displayed at the expense of "ifspace" elements. If there is another "order" element that collides, a choice will be made (based on priority etc.) as to which single element will be displayed to prevent overlap.
+- always: A convenience fallback, which means that an element will always be displayed regardless of whether there is an overlap or not (so others can easily cover it).
+- never: A convenience fallback, which means that an element will never be displayed.
 
 ## SVG Symbols
 

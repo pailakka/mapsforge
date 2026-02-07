@@ -6,7 +6,7 @@
  * Copyright 2019 Adrian Batzill
  * Copyright 2019 Matthew Egeler
  * Copyright 2019 mg4gh
- * Copyright 2024 Sublimis
+ * Copyright 2024-2025 Sublimis
  *
  * This program is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -21,11 +21,12 @@
  */
 package org.mapsforge.map.awt.graphics;
 
+import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.graphics.Canvas;
 import org.mapsforge.core.graphics.Color;
 import org.mapsforge.core.graphics.Paint;
-import org.mapsforge.core.graphics.*;
 import org.mapsforge.core.model.Dimension;
+import org.mapsforge.core.model.Point;
 import org.mapsforge.core.model.Rectangle;
 import org.mapsforge.core.model.Rotation;
 import org.mapsforge.core.util.Parameters;
@@ -50,7 +51,7 @@ class AwtCanvas implements Canvas {
     private static Map.Entry<Float, Composite> sizeOneShadingCompositeCache = null;
     private final AffineTransform transform = new AffineTransform();
 
-    private static Composite getHillshadingComposite(float magnitude) {
+    private static Composite getHillshadingComposite(float magnitude, boolean external) {
         Map.Entry<Float, Composite> existing = sizeOneShadingCompositeCache;
         if (existing != null && existing.getKey() == magnitude) {
             // JMM says: "A thread-safe immutable object is seen as immutable by all threads, even
@@ -59,7 +60,7 @@ class AwtCanvas implements Canvas {
             return existing.getValue();
         }
 
-        Composite selected = AlphaComposite.getInstance(AlphaComposite.SRC_ATOP, magnitude);
+        Composite selected = AlphaComposite.getInstance(external ? AlphaComposite.SRC_OVER : AlphaComposite.SRC_ATOP, magnitude);
 
         if (sizeOneShadingCompositeCache == null) {
             // only cache the first magnitude value, in the rare instance that more than one
@@ -208,6 +209,11 @@ class AwtCanvas implements Canvas {
         }
 
         throw new IllegalArgumentException(UNKNOWN_STYLE + style);
+    }
+
+    @Override
+    public void drawLines(Point[][] coordinates, float dy, Paint paint) {
+        // Not used
     }
 
     @Override
@@ -399,7 +405,7 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
-    public void setClipDifference(int left, int top, int width, int height) {
+    public void setClipDifference(float left, float top, float width, float height) {
         Area clip = new Area(new Rectangle2D.Double(0, 0, getWidth(), getHeight()));
         clip.subtract(new Area(new Rectangle2D.Double(left, top, width, height)));
         this.graphics2D.setClip(clip);
@@ -411,9 +417,9 @@ class AwtCanvas implements Canvas {
     }
 
     @Override
-    public void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude, int color) {
+    public void shadeBitmap(Bitmap bitmap, Rectangle shadeRect, Rectangle tileRect, float magnitude, int color, boolean external) {
         Composite oldComposite = this.graphics2D.getComposite();
-        Composite composite = getHillshadingComposite(magnitude);
+        Composite composite = getHillshadingComposite(magnitude, external);
         this.graphics2D.setComposite(composite);
 
         if (bitmap == null) {

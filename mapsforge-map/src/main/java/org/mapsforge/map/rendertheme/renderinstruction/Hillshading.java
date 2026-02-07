@@ -25,8 +25,8 @@ import org.mapsforge.core.model.Tile;
 import org.mapsforge.core.util.MercatorProjection;
 import org.mapsforge.map.layer.hills.AThreadedHillShading;
 import org.mapsforge.map.layer.hills.HgtCache;
-import org.mapsforge.map.layer.hills.HillShadingUtils.SilentFutureTask;
 import org.mapsforge.map.layer.hills.HillShadingUtils.HillShadingThreadPool;
+import org.mapsforge.map.layer.hills.HillShadingUtils.SilentFutureTask;
 import org.mapsforge.map.layer.hills.HillsRenderConfig;
 import org.mapsforge.map.layer.renderer.HillshadingContainer;
 import org.mapsforge.map.layer.renderer.ShapeContainer;
@@ -128,7 +128,7 @@ public class Hillshading {
         return retVal;
     }
 
-    protected SilentFutureTask renderLatStrip(final RenderContext renderContext, final HillsRenderConfig hillsRenderConfig, final int shadingLeftLon, final byte zoomLevel, final Tile tile, final double maptileBottomLat, final double maptileTopLat, final double maptileLeftLon, final double maptileRightLon, final float effectiveMagnitude, int effectiveColor) {
+    protected SilentFutureTask renderLatStrip(final RenderContext renderContext, final HillsRenderConfig hillsRenderConfig, final int shadingLeftLon, final byte zoomLevel, final Tile tile, final double maptileBottomLat, final double maptileTopLat, final double maptileLeftLon, final double maptileRightLon, final float effectiveMagnitude, final int effectiveColor) {
         Callable<Boolean> runnable = new Callable<Boolean>() {
             public Boolean call() {
                 final int shadingRightLon = shadingLeftLon + ShadingLonStep;
@@ -222,7 +222,7 @@ public class Hillshading {
 
                     final Rectangle hillsRect = (shadingTile == null) ? null : new Rectangle(shadingSubrectLeft, shadingSubrectTop, shadingSubrectRight, shadingSubrectBottom);
                     final Rectangle maptileRect = new Rectangle(maptileSubrectLeft, maptileSubrectTop, maptileSubrectRight, maptileSubrectBottom);
-                    final ShapeContainer hillShape = new HillshadingContainer(shadingTile, effectiveMagnitude, effectiveColor, hillsRect, maptileRect);
+                    final ShapeContainer hillShape = new HillshadingContainer(shadingTile, effectiveMagnitude, effectiveColor, hillsRect, maptileRect, hillsRenderConfig.isExternal());
 
                     final ShapePaintContainer newContainer = new ShapePaintContainer(hillShape, null);
 
