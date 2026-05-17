@@ -16,7 +16,7 @@
 | [Bladenight App](https://play.google.com/store/apps/details?id=fr.ocroquette.bladenight) | Tracking for inline skating events | Proprietary/Free | Closed |
 | [Calimoto](https://play.google.com/store/apps/details?id=com.calimoto.calimoto) | Motorrad navigation | Proprietary/Free (in-app purchases) | Closed |
 | [Cartograph 2 Maps](https://www.cartograph.eu/) | Map viewer and tracking | Proprietary/Commercial | Closed |
-| [Cruiser](https://wiki.openstreetmap.org/wiki/Cruiser) | Map and navigation platform for Android and Desktop | Proprietary/Free | Closed |
+| [Cruiser](https://github.com/devemux86/cruiser) | Offline route planning and navigation application | Proprietary/Free | Closed |
 | [c:geo](https://www.cgeo.org) | Geocaching | Apache 2.0/Free | Open |
 | [DogSheep](https://play.google.com/store/apps/details?id=com.dogsheep) | Customized maps and tours | Proprietary/Free | Closed |
 | [ELEMNT](http://eu.wahoofitness.com/devices/gps-bike-computer-elemnt.html) | GPS bike computer | Proprietary/Commercial | Closed |
@@ -56,6 +56,7 @@
 | [SatStat](https://mvglasow.github.io/satstat) | Android location, sensor and radio network status | GPL3+/Free | Open |
 | [Serval Maps](http://developer.servalproject.org/dokuwiki/doku.php?id=content:servalmaps:main_page) | Collaborative Mapping using a Mesh Network | GPL3/Free | Open |
 | [TingBY](http://ting.by/) | City guide | Proprietary/Free | Closed |
+| [Trail Sense](https://github.com/kylecorry31/Trail-Sense) | Offline outdoor tools | MIT/Free | Open |
 | [Ultra GPS Logger](https://play.google.com/store/apps/details?id=com.flashlight.ultra.gps.logger) | GPS tracker | Proprietary/Commercial | Closed |
 | [Urban Biker](https://play.google.com/store/apps/details?id=com.sublimis.urbanbiker) | Activity tracker, maps, navigation, dashboard | Proprietary/Free | Closed |
 | [UtalTransitMap](https://play.google.com/store/apps/details?id=com.mdmitry1973.utahtransitmap) | Transport Guide | Proprietary/Free | Closed |
