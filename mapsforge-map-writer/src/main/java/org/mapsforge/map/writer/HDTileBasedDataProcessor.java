@@ -18,14 +18,19 @@
 package org.mapsforge.map.writer;
 
 import org.mapsforge.map.writer.model.MapWriterConfiguration;
+import org.mapsforge.map.writer.model.OSMTag;
+import org.mapsforge.map.writer.model.SpecialTagExtractionResult;
 import org.mapsforge.map.writer.model.TDNode;
 import org.mapsforge.map.writer.model.TDRelation;
 import org.mapsforge.map.writer.model.TDWay;
 import org.mapsforge.map.writer.model.TileCoordinate;
 import org.mapsforge.map.writer.model.TileData;
 import org.mapsforge.map.writer.model.TileInfo;
+import org.mapsforge.map.writer.util.OSMUtils;
+import org.mapsforge.map.writer.util.WriterPerformance;
 import org.openstreetmap.osmosis.core.domain.v0_6.Node;
 import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
+import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.openstreetmap.osmosis.core.domain.v0_6.Way;
 import org.openstreetmap.osmosis.core.lifecycle.ReleasableIterator;
 import org.openstreetmap.osmosis.core.store.IndexedObjectStore;
@@ -38,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import gnu.trove.iterator.TLongIterator;
@@ -106,7 +112,9 @@ public final class HDTileBasedDataProcessor extends BaseTileBasedDataProcessor {
     @Override
     public void addRelation(Relation relation) {
         super.addRelation(relation);
-        this.relationStore.add(relation);
+        if (isKnownRelationType(relation)) {
+            this.relationStore.add(relation);
+        }
     }
 
     @Override
@@ -128,11 +136,13 @@ public final class HDTileBasedDataProcessor extends BaseTileBasedDataProcessor {
     // TODO add accounting of average number of tiles per way
     @Override
     public void complete() {
+        long started = WriterPerformance.now();
         this.indexedNodeStore.complete();
         this.nodeIndexReader = this.indexedNodeStore.createReader();
 
         this.indexedWayStore.complete();
         this.wayIndexReader = this.indexedWayStore.createReader();
+        WriterPerformance.logPhase(LOGGER, "hd-complete-indexes", started);
 
         LOGGER.info("handle coastlines" +
                 (this.tagValues ? " and implicit way relations..." : "..."));
@@ -141,6 +151,7 @@ public final class HDTileBasedDataProcessor extends BaseTileBasedDataProcessor {
         // the WayHandler does only process ids in HD Processor)
         long nWays = 0;
         ReleasableIterator<Way> wayReader = this.wayStore.iterate();
+        started = WriterPerformance.now();
         while (wayReader.hasNext()) {
             if (this.progressLogs) {
                 if (++nWays % 10000 == 0) {
@@ -150,30 +161,43 @@ public final class HDTileBasedDataProcessor extends BaseTileBasedDataProcessor {
             }
 
             Way way = wayReader.next();
+            Map<Short, Object> knownWayTags = OSMUtils.extractKnownWayTags(way);
+            if (!needsImplicitWayPreparation(knownWayTags)) {
+                continue;
+            }
             TDWay tdWay = TDWay.fromWay(way, this, this.preferredLanguages);
             if (tdWay == null) {
                 continue;
             }
             prepareImplicitWayRelations(tdWay);
         }
+        WriterPerformance.logPhase(LOGGER, "hd-complete-coastlines-and-implicit-prep", started);
 
         // handle implicit relations
+        started = WriterPerformance.now();
         handleImplicitWayRelations();
+        WriterPerformance.logPhase(LOGGER, "hd-complete-implicit-relations", started);
 
         LOGGER.info("handle relations...");
         ReleasableIterator<Relation> relationReader = this.relationStore.iterate();
         RelationHandler relationHandler = new RelationHandler();
+        started = WriterPerformance.now();
         while (relationReader.hasNext()) {
             Relation entry = relationReader.next();
             TDRelation tdRelation = TDRelation.fromRelation(entry, this, this.preferredLanguages);
             relationHandler.execute(tdRelation);
         }
+        WriterPerformance.logPhase(LOGGER, "hd-complete-relations", started);
 
         LOGGER.info("handle ways...");
         wayReader = this.wayStore.iterate();
         WayHandler wayHandler = new WayHandler();
+        started = WriterPerformance.now();
         while (wayReader.hasNext()) {
             Way way = wayReader.next();
+            if (!needsWayHandling(way)) {
+                continue;
+            }
             TDWay tdWay = TDWay.fromWay(way, this, this.preferredLanguages);
             if (tdWay == null) {
                 continue;
@@ -189,9 +213,12 @@ public final class HDTileBasedDataProcessor extends BaseTileBasedDataProcessor {
 
             wayHandler.execute(tdWay);
         }
+        WriterPerformance.logPhase(LOGGER, "hd-complete-ways", started);
 
+        started = WriterPerformance.now();
         OSMTagMapping.getInstance().optimizePoiOrdering(this.histogramPoiTags);
         OSMTagMapping.getInstance().optimizeWayOrdering(this.histogramWayTags);
+        WriterPerformance.logPhase(LOGGER, "hd-complete-tag-ordering", started);
     }
 
     @Override
@@ -378,5 +405,47 @@ public final class HDTileBasedDataProcessor extends BaseTileBasedDataProcessor {
         }
 
         return res;
+    }
+
+    private boolean needsImplicitWayPreparation(Map<Short, Object> knownWayTags) {
+        if (knownWayTags == null || knownWayTags.isEmpty()) {
+            return false;
+        }
+
+        List<OSMTag> osmTags = OSMTagMapping.getInstance().getWayTags(knownWayTags.keySet());
+        for (OSMTag tag : osmTags) {
+            if (tag.isCoastline()) {
+                return true;
+            }
+            if (this.tagValues && (tag.isBuilding() || tag.isBuildingPart())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean needsWayHandling(Way way) {
+        if (this.additionalRelationTags.containsKey(way.getId())) {
+            return true;
+        }
+
+        if (!OSMUtils.extractKnownWayTags(way).isEmpty()) {
+            return true;
+        }
+
+        SpecialTagExtractionResult specialTags = OSMUtils.extractSpecialFields(way, this.preferredLanguages);
+        return specialTags.getName() != null && !specialTags.getName().isEmpty()
+                || specialTags.getRef() != null && !specialTags.getRef().isEmpty();
+    }
+
+    private static boolean isKnownRelationType(Relation relation) {
+        for (Tag tag : relation.getTags()) {
+            if ("type".equals(tag.getKey())) {
+                return TDRelation.knownRelationType(tag.getValue());
+            }
+        }
+
+        return false;
     }
 }

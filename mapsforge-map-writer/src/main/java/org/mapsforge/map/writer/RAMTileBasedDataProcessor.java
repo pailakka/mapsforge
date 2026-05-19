@@ -26,6 +26,7 @@ import org.mapsforge.map.writer.model.TileCoordinate;
 import org.mapsforge.map.writer.model.TileData;
 import org.mapsforge.map.writer.model.TileInfo;
 import org.mapsforge.map.writer.model.ZoomIntervalConfiguration;
+import org.mapsforge.map.writer.util.WriterPerformance;
 import org.openstreetmap.osmosis.core.domain.v0_6.Node;
 import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.Way;
@@ -113,19 +114,27 @@ public final class RAMTileBasedDataProcessor extends BaseTileBasedDataProcessor 
 
     @Override
     public void complete() {
+        long started = WriterPerformance.now();
         handleImplicitWayRelations();
+        WriterPerformance.logPhase(LOGGER, "ram-complete-implicit-relations", started);
 
         // Polygonize multipolygon
         LOGGER.info("handle relations...");
+        started = WriterPerformance.now();
         RelationHandler relationHandler = new RelationHandler();
         this.multipolygons.forEachValue(relationHandler);
+        WriterPerformance.logPhase(LOGGER, "ram-complete-relations", started);
 
         LOGGER.info("handle ways...");
+        started = WriterPerformance.now();
         WayHandler wayHandler = new WayHandler();
         this.ways.forEachValue(wayHandler);
+        WriterPerformance.logPhase(LOGGER, "ram-complete-ways", started);
 
+        started = WriterPerformance.now();
         OSMTagMapping.getInstance().optimizePoiOrdering(this.histogramPoiTags);
         OSMTagMapping.getInstance().optimizeWayOrdering(this.histogramWayTags);
+        WriterPerformance.logPhase(LOGGER, "ram-complete-tag-ordering", started);
     }
 
     @Override

@@ -23,6 +23,7 @@ import org.mapsforge.map.writer.RAMTileBasedDataProcessor;
 import org.mapsforge.map.writer.model.MapWriterConfiguration;
 import org.mapsforge.map.writer.model.TileBasedDataProcessor;
 import org.mapsforge.map.writer.util.Constants;
+import org.mapsforge.map.writer.util.WriterPerformance;
 import org.openstreetmap.osmosis.core.container.v0_6.EntityContainer;
 import org.openstreetmap.osmosis.core.domain.v0_6.Bound;
 import org.openstreetmap.osmosis.core.domain.v0_6.Entity;
@@ -45,9 +46,10 @@ public class MapFileWriterTask implements Sink {
     private static final Logger LOGGER = Logger.getLogger(MapFileWriterTask.class.getName());
 
     private final MapWriterConfiguration configuration;
+    private long firstEntityNanos = -1;
     private TileBasedDataProcessor tileBasedGeoObjectStore;
 
-    MapFileWriterTask(MapWriterConfiguration configuration) {
+    public MapFileWriterTask(MapWriterConfiguration configuration) {
         this.configuration = configuration;
 
         Properties properties = new Properties();
@@ -101,7 +103,12 @@ public class MapFileWriterTask implements Sink {
         nfMegabyte.setMaximumFractionDigits(2);
 
         LOGGER.info("completing read...");
+        if (this.firstEntityNanos > 0) {
+            WriterPerformance.logPhase(LOGGER, "read-and-ingest", this.firstEntityNanos);
+        }
+        long completeStarted = WriterPerformance.now();
         this.tileBasedGeoObjectStore.complete();
+        WriterPerformance.logPhase(LOGGER, "datastore-complete", completeStarted);
 
         LOGGER.info("start writing file...");
 
@@ -110,15 +117,23 @@ public class MapFileWriterTask implements Sink {
                 LOGGER.info("overwriting file " + this.configuration.getOutputFile().getAbsolutePath());
                 this.configuration.getOutputFile().delete();
             }
+            long writeStarted = WriterPerformance.now();
             MapFileWriter.writeFile(this.configuration, this.tileBasedGeoObjectStore);
+            WriterPerformance.logPhase(LOGGER, "map-file-write", writeStarted);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "error while writing file", e);
+            throw new RuntimeException("error while writing file", e);
+        } finally {
+            MapFileWriter.release();
         }
 
         LOGGER.info("finished...");
-        LOGGER.fine("total processed nodes: " + nfCounts.format(this.tileBasedGeoObjectStore.getNodesNumber()));
-        LOGGER.fine("total processed ways: " + nfCounts.format(this.tileBasedGeoObjectStore.getWaysNumber()));
-        LOGGER.fine("total processed relations: " + nfCounts.format(this.tileBasedGeoObjectStore.getRelationsNumber()));
+        LOGGER.info("total processed nodes: " + nfCounts.format(this.tileBasedGeoObjectStore.getNodesNumber()));
+        LOGGER.info("total processed ways: " + nfCounts.format(this.tileBasedGeoObjectStore.getWaysNumber()));
+        LOGGER.info("total processed relations: " + nfCounts.format(this.tileBasedGeoObjectStore.getRelationsNumber()));
+        WriterPerformance.logCount(LOGGER, "nodes", this.tileBasedGeoObjectStore.getNodesNumber());
+        WriterPerformance.logCount(LOGGER, "ways", this.tileBasedGeoObjectStore.getWaysNumber());
+        WriterPerformance.logCount(LOGGER, "relations", this.tileBasedGeoObjectStore.getRelationsNumber());
 
         LOGGER.info("estimated memory consumption: "
                 + nfMegabyte.format(+((Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / Math
@@ -136,6 +151,9 @@ public class MapFileWriterTask implements Sink {
 
     @Override
     public final void process(EntityContainer entityContainer) {
+        if (this.firstEntityNanos < 0) {
+            this.firstEntityNanos = WriterPerformance.now();
+        }
         Entity entity = entityContainer.getEntity();
 
         switch (entity.getType()) {

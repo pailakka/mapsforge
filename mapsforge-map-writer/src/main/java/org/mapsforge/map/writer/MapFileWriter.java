@@ -50,6 +50,7 @@ import org.mapsforge.map.writer.util.GeoUtils;
 import org.mapsforge.map.writer.util.JTSUtils;
 import org.mapsforge.map.writer.util.OSMUtils;
 import org.mapsforge.map.writer.util.PolyLabel;
+import org.mapsforge.map.writer.util.WriterPerformance;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -65,6 +66,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -72,6 +74,72 @@ import java.util.logging.Logger;
  * Writes the binary file format for mapsforge maps.
  */
 public final class MapFileWriter {
+    private static class WriteStats {
+        private final LongAdder bitmaskNanos = new LongAdder();
+        private final LongAdder blockConversionNanos = new LongAdder();
+        private final LongAdder clipNanos = new LongAdder();
+        private final LongAdder encodeNanos = new LongAdder();
+        private final LongAdder geometryLoadNanos = new LongAdder();
+        private final LongAdder labelNanos = new LongAdder();
+        private final LongAdder simplifyNanos = new LongAdder();
+        private final LongAdder tileProcessNanos = new LongAdder();
+        private final LongAdder tileWriteNanos = new LongAdder();
+        private final LongAdder waySerializationNanos = new LongAdder();
+
+        void addBitmask(long nanos) {
+            this.bitmaskNanos.add(nanos);
+        }
+
+        void addBlockConversion(long nanos) {
+            this.blockConversionNanos.add(nanos);
+        }
+
+        void addClip(long nanos) {
+            this.clipNanos.add(nanos);
+        }
+
+        void addEncode(long nanos) {
+            this.encodeNanos.add(nanos);
+        }
+
+        void addGeometryLoad(long nanos) {
+            this.geometryLoadNanos.add(nanos);
+        }
+
+        void addLabel(long nanos) {
+            this.labelNanos.add(nanos);
+        }
+
+        void addSimplify(long nanos) {
+            this.simplifyNanos.add(nanos);
+        }
+
+        void addTileProcess(long nanos) {
+            this.tileProcessNanos.add(nanos);
+        }
+
+        void addTileWrite(long nanos) {
+            this.tileWriteNanos.add(nanos);
+        }
+
+        void addWaySerialization(long nanos) {
+            this.waySerializationNanos.add(nanos);
+        }
+
+        void log(Logger logger) {
+            WriterPerformance.logPhaseNanos(logger, "write-geometry-load", this.geometryLoadNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-geometry-clip", this.clipNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-geometry-simplify", this.simplifyNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-way-block-conversion", this.blockConversionNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-subtile-bitmask", this.bitmaskNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-label-placement", this.labelNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-way-encoding", this.encodeNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-way-serialization", this.waySerializationNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-tile-processing", this.tileProcessNanos.sum());
+            WriterPerformance.logPhaseNanos(logger, "write-tile-output", this.tileWriteNanos.sum());
+        }
+    }
+
     private static class JTSGeometryCacheLoader extends CacheLoader<TDWay, Geometry> {
         private final TileBasedDataProcessor datastore;
 
@@ -106,6 +174,7 @@ public final class MapFileWriter {
         private final MapWriterConfiguration configuration;
         private final LoadingCache<TDWay, Geometry> jtsGeometryCache;
         private final byte maxZoomInterval;
+        private final WriteStats stats;
         private final TileCoordinate tile;
         private final Geometry tileAsGeometry;
         private final TDWay way;
@@ -118,7 +187,8 @@ public final class MapFileWriter {
          * @param configuration    the {@link MapWriterConfiguration}
          */
         WayPreprocessingCallable(TDWay way, TileCoordinate tile, Geometry tileAsGeometry, byte maxZoomInterval,
-                LoadingCache<TDWay, Geometry> jtsGeometryCache, MapWriterConfiguration configuration) {
+                LoadingCache<TDWay, Geometry> jtsGeometryCache, MapWriterConfiguration configuration,
+                WriteStats stats) {
             super();
             this.way = way;
             this.tile = tile;
@@ -126,6 +196,7 @@ public final class MapFileWriter {
             this.maxZoomInterval = maxZoomInterval;
             this.jtsGeometryCache = jtsGeometryCache;
             this.configuration = configuration;
+            this.stats = stats;
         }
 
         @Override
@@ -145,11 +216,14 @@ public final class MapFileWriter {
             // not as polygons
 
             Geometry originalGeometry;
+            long started = WriterPerformance.now();
             try {
                 originalGeometry = this.jtsGeometryCache.get(this.way);
             } catch (ExecutionException e) {
                 this.way.setInvalid(true);
                 return null;
+            } finally {
+                this.stats.addGeometryLoad(WriterPerformance.now() - started);
             }
 
             Geometry processedGeometry = originalGeometry;
@@ -158,7 +232,9 @@ public final class MapFileWriter {
             if ((originalGeometry instanceof Polygon || originalGeometry instanceof MultiPolygon) && this.configuration.isPolygonClipping()
                     || (originalGeometry instanceof LineString || originalGeometry instanceof MultiLineString)
                     && this.configuration.isWayClipping()) {
+                started = WriterPerformance.now();
                 processedGeometry = GeoUtils.clipToTile(this.way, originalGeometry, this.tileAsGeometry);
+                this.stats.addClip(WriterPerformance.now() - started);
                 if (processedGeometry == null) {
                     return null;
                 }
@@ -166,8 +242,10 @@ public final class MapFileWriter {
 
             if (this.configuration.getSimplification() > 0
                     && this.tile.getZoomlevel() <= this.configuration.getSimplificationMaxZoom()) {
+                started = WriterPerformance.now();
                 processedGeometry = GeoUtils.simplifyGeometry(this.way, processedGeometry, this.maxZoomInterval,
                         tileSize, this.configuration.getSimplification());
+                this.stats.addSimplify(WriterPerformance.now() - started);
                 if (processedGeometry == null) {
                     return null;
                 }
@@ -178,7 +256,9 @@ public final class MapFileWriter {
             }
 
 
+            started = WriterPerformance.now();
             List<WayDataBlock> blocks = GeoUtils.toWayDataBlockList(processedGeometry);
+            this.stats.addBlockConversion(WriterPerformance.now() - started);
             if (blocks == null) {
                 return null;
             }
@@ -186,12 +266,15 @@ public final class MapFileWriter {
                 LOGGER.finer("empty list of way data blocks after preprocessing way: " + this.way.getId());
                 return null;
             }
+            started = WriterPerformance.now();
             short subtileMask = GeoUtils.computeBitmask(processedGeometry, this.tile,
                     this.configuration.getBboxEnlargement());
+            this.stats.addBitmask(WriterPerformance.now() - started);
 
             // Compute the label/symbol coordinates of the non clipped polygon
             LatLong labelCoordinate = null;
             if (this.way.isValidClosedLine()) {
+                started = WriterPerformance.now();
                 boolean labelPosition = this.configuration.isLabelPosition();
                 if (!labelPosition) {
                     List<OSMTag> tags = this.configuration.getTagMapping().getWayTags(this.way.getTags().keySet());
@@ -209,8 +292,10 @@ public final class MapFileWriter {
                         labelCoordinate = GeoUtils.computeInteriorPoint(originalGeometry);
                     }
                 }
+                this.stats.addLabel(WriterPerformance.now() - started);
             }
 
+            started = WriterPerformance.now();
             switch (this.configuration.getEncodingChoice()) {
                 case SINGLE:
                     blocks = DeltaEncoder.encode(blocks, Encoding.DELTA);
@@ -230,6 +315,7 @@ public final class MapFileWriter {
                     }
                     break;
             }
+            this.stats.addEncode(WriterPerformance.now() - started);
 
             return new WayPreprocessingResult(this.way, blocks, labelCoordinate, subtileMask);
         }
@@ -374,6 +460,7 @@ public final class MapFileWriter {
         final LoadingCache<TDWay, Geometry> jtsGeometryCache = CacheBuilder.newBuilder()
                 .maximumSize(JTS_GEOMETRY_CACHE_SIZE).concurrencyLevel(Runtime.getRuntime().availableProcessors() * 2)
                 .build(new JTSGeometryCacheLoader(dataProcessor));
+        final WriteStats writeStats = new WriteStats();
 
         // SUB FILES
         // for each zoom interval write a sub file
@@ -381,7 +468,7 @@ public final class MapFileWriter {
         for (int i = 0; i < amountOfZoomIntervals; i++) {
             // SUB FILE INDEX AND DATA
             long subfileSize = writeSubfile(currentFileSize, i, dataProcessor, jtsGeometryCache, randomAccessFile,
-                    configuration);
+                    configuration, writeStats);
             // SUB FILE META DATA IN CONTAINER HEADER
             writeSubfileMetaDataToContainerHeader(dataProcessor.getZoomIntervalConfiguration(), i, currentFileSize,
                     subfileSize, containerHeaderBuffer);
@@ -402,6 +489,7 @@ public final class MapFileWriter {
         LOGGER.fine("Tag values stats:\n" + OSMUtils.logValueTypeCount());
         LOGGER.info("JTS Geometry cache hit rate: " + stats.hitRate());
         LOGGER.info("JTS Geometry total load time: " + stats.totalLoadTime() / 1000);
+        writeStats.log(LOGGER);
 
         LOGGER.info("Finished writing file.");
     }
@@ -410,7 +498,10 @@ public final class MapFileWriter {
      * Cleans up thread pool. Must only be called at the end of processing.
      */
     public static void release() {
-        EXECUTOR_SERVICE.shutdown();
+        if (EXECUTOR_SERVICE != null) {
+            EXECUTOR_SERVICE.shutdown();
+            EXECUTOR_SERVICE = null;
+        }
     }
 
     static byte infoByteOptmizationParams(MapWriterConfiguration configuration) {
@@ -829,7 +920,7 @@ public final class MapFileWriter {
     private static void processTile(MapWriterConfiguration configuration, TileCoordinate tileCoordinate,
                                     TileBasedDataProcessor dataProcessor, LoadingCache<TDWay, Geometry> jtsGeometryCache,
                                     int zoomIntervalIndex, ByteBuffer tileBuffer, ByteBuffer poiDataBuffer, ByteBuffer wayDataBuffer,
-                                    ByteBuffer wayBuffer) {
+                                    ByteBuffer wayBuffer, WriteStats writeStats) {
         tileBuffer.clear();
         poiDataBuffer.clear();
         wayDataBuffer.clear();
@@ -889,7 +980,7 @@ public final class MapFileWriter {
                     for (TDWay way : ways) {
                         if (!way.isInvalid()) {
                             callables.add(new WayPreprocessingCallable(way, tileCoordinate, tileAsGeometry,
-                                    maxZoomCurrentInterval, jtsGeometryCache, configuration));
+                                    maxZoomCurrentInterval, jtsGeometryCache, configuration, writeStats));
                         }
                     }
                     try {
@@ -910,7 +1001,9 @@ public final class MapFileWriter {
                                     if (configuration.isDebugStrings()) {
                                         writeWaySignature(wpr.getWay(), wayDataBuffer);
                                     }
+                                    long started = WriterPerformance.now();
                                     processWay(wpr, wpr.getWay(), currentTileLat, currentTileLon, wayBuffer);
+                                    writeStats.addWaySerialization(WriterPerformance.now() - started);
                                     if (wayBuffer.position() > wayBuffer.limit()) {
                                         LOGGER.log(Level.SEVERE,"TOO LARGE FOR BUFFER!");
                                         LOGGER.log(Level.SEVERE,tileCoordinate.toString());
@@ -957,7 +1050,8 @@ public final class MapFileWriter {
 
     private static long writeSubfile(final long startPositionSubfile, final int zoomIntervalIndex,
                                      final TileBasedDataProcessor dataStore, final LoadingCache<TDWay, Geometry> jtsGeometryCache,
-                                     final RandomAccessFile randomAccessFile, final MapWriterConfiguration configuration) throws IOException {
+                                     final RandomAccessFile randomAccessFile, final MapWriterConfiguration configuration,
+                                     final WriteStats writeStats) throws IOException {
         LOGGER.fine("writing data for zoom interval " + zoomIntervalIndex + ", number of tiles: "
                 + dataStore.getTileGridLayout(zoomIntervalIndex).getAmountTilesHorizontal()
                 * dataStore.getTileGridLayout(zoomIntervalIndex).getAmountTilesVertical());
@@ -1002,11 +1096,15 @@ public final class MapFileWriter {
                 TileCoordinate tileCoordinate = new TileCoordinate(tileX, tileY, baseZoomCurrentInterval);
 
                 processIndexEntry(tileCoordinate, indexBuffer, currentSubfileOffset);
+                long tileStarted = WriterPerformance.now();
                 processTile(configuration, tileCoordinate, dataStore, jtsGeometryCache, zoomIntervalIndex, tileBuffer,
-                        poiDataBuffer, wayDataBuffer, wayBuffer);
+                        poiDataBuffer, wayDataBuffer, wayBuffer, writeStats);
+                writeStats.addTileProcess(WriterPerformance.now() - tileStarted);
                 currentSubfileOffset += tileBuffer.position();
 
+                long writeStarted = WriterPerformance.now();
                 writeTile(multipleTilesBuffer, tileBuffer, randomAccessFile);
+                writeStats.addTileWrite(WriterPerformance.now() - writeStarted);
 
                 if (++processedTiles % amountOfTilesInPercentStep == 0) {
                     if (processedTiles == amountTiles) {
