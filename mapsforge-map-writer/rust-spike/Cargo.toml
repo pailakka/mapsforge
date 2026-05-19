@@ -1,0 +1,12 @@
+[package]
+name = "mapsforge-writer-rust-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+geo = "0.32"
+libc = "0.2"
+osmpbf = "0.3"
+roxmltree = "0.20"
+rstar = "0.12"
