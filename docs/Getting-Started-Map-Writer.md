@@ -6,7 +6,7 @@ This documentation is intended for those who want to create map files for use wi
 
 ## Introduction
 
-This document describes the mapsforge map-writer plugin. It allows to convert OpenStreetMap data into the .map format which is needed to display maps with mapsforge-based applications. The tool is implemented as a plugin to the [Osmosis](http://wiki.openstreetmap.org/wiki/Osmosis) software. To use the tool, you are required to have a working installation of Osmosis and the writer plugin copied to the plugins directory of Osmosis. You should also be familiar with the Osmosis tool.
+This document describes the mapsforge map-writer. It allows to convert OpenStreetMap data into the .map format which is needed to display maps with mapsforge-based applications. The tool can be used as a standalone PBF writer or as a plugin to the [Osmosis](http://wiki.openstreetmap.org/wiki/Osmosis) software. To use the Osmosis plugin, you are required to have a working installation of Osmosis and the writer plugin copied to the plugins directory of Osmosis. You should also be familiar with the Osmosis tool.
 
 The mapsforge writer has not changed significantly from version 0.3 and files generated with either version can be loaded into mapsforge applications 0.4.+
 
@@ -15,6 +15,44 @@ The mapsforge writer has not changed significantly from version 0.3 and files ge
 - Activate the plugin with the Osmosis parameter ‘--mapfile-writer’, or short ‘--mw’.
 - The plugin requires an input stream of valid OSM data. Use for example the MySQL, PostGIS, XML or PBF-Binary tasks of Osmosis to read OSM data.
 - Use the following optional parameters to configure the process of map creation:
+
+## Standalone PBF Usage
+
+The writer jar with dependencies is also directly executable for PBF input. This avoids the Osmosis command pipeline when all you need is a `.osm.pbf` to `.map` conversion:
+
+```bash
+java -jar mapsforge-map-writer-master-SNAPSHOT-jar-with-dependencies.jar \
+  --input data.osm.pbf \
+  --output out.map \
+  --type ram
+```
+
+Standalone mode accepts the same writer options listed below, using either `--option value`, `--option=value`, or `option=value` syntax. The standalone aliases `--output` and `--file` both select the generated map file.
+
+For repeatable performance measurements, use the benchmark harness from the repository root:
+
+```bash
+mapsforge-map-writer/scripts/benchmark-writer.sh \
+  --input data.osm.pbf \
+  --output build/bench/out.map \
+  --runs 3 -- --type ram --threads 1
+```
+
+The benchmark defaults to Java 21. If Java 21 is not installed locally, run it with a JDK container:
+
+```bash
+mapsforge-map-writer/scripts/benchmark-writer.sh \
+  --input data.osm.pbf \
+  --output build/bench/out.map \
+  --runs 3 \
+  --docker-image eclipse-temurin:21-jdk -- --type hd --threads 1
+```
+
+For local benchmark extracts, the helper below merges all `testdata/*.osm.pbf` files into one larger PBF:
+
+```bash
+mapsforge-map-writer/scripts/merge-testdata.sh --output testdata/merged.osm.pbf
+```
 
 ### Basic Options
 

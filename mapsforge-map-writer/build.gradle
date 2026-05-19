@@ -7,6 +7,8 @@ dependencies {
     implementation 'net.sf.trove4j:trove4j:3.0.3'
     implementation 'org.locationtech.jts:jts-core:1.20.0'
     compileOnly 'org.openstreetmap.osmosis:osmosis-core:0.47'
+    compileOnly 'org.openstreetmap.osmosis:osmosis-pbf:0.47'
+    runtimeOnly 'org.openstreetmap.osmosis:osmosis-pbf:0.47'
     testImplementation "junit:junit:$jUnitVersion"
 }
 
@@ -14,6 +16,9 @@ sourceSets.test.compileClasspath += configurations.compileClasspath - configurat
 sourceSets.test.runtimeClasspath += configurations.compileClasspath - configurations.runtimeClasspath
 
 jar {
+    manifest {
+        attributes 'Main-Class': 'org.mapsforge.map.writer.cli.MapsforgeWriter'
+    }
     from('src/main/config/') {
         filter {
             line -> line.replace('${mapfile.writer.version}', version)
@@ -25,6 +30,9 @@ tasks.register('fatJar', Jar) {
     dependsOn configurations.runtimeClasspath
     archiveClassifier = 'jar-with-dependencies'
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    manifest {
+        attributes 'Main-Class': 'org.mapsforge.map.writer.cli.MapsforgeWriter'
+    }
     from {
         configurations.runtimeClasspath.collect {
             it.isDirectory() ? it : zipTree(it)
